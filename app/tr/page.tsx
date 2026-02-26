@@ -20,6 +20,14 @@ export default function PaginaTR() {
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
 
+  // 🧹 FUNÇÃO NOVA: Limpa a memória do navegador (Regressão Zero)
+  const limparMemoria = () => {
+    localStorage.removeItem('licitacao_objeto');
+    localStorage.removeItem('licitacao_especificacao');
+    setObjeto('');
+    setEspecificacao('');
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -65,15 +73,29 @@ export default function PaginaTR() {
     <main className="min-h-screen bg-slate-50 p-8 font-sans text-slate-900">
       <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-8 border border-slate-200">
         
+        <div className="mb-6 bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono text-center tracking-wider shadow-sm">
+          SISTEMA DE APOIO À DECISÃO E GOVERNANÇA - LEI 14.133/2021
+        </div>
+
         <nav className="mb-6 text-sm font-medium space-x-4 border-b pb-4">
           <Link href="/" className="text-slate-500 hover:text-green-600 transition-colors">← Voltar para DFD</Link>
           <Link href="/etp" className="text-slate-500 hover:text-green-600 transition-colors">← Voltar para ETP</Link>
           <span className="text-green-700 font-bold">Módulo TR</span>
         </nav>
         
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold text-green-900">Fase 3: Termo de Referência (TR)</h1>
-          <p className="text-slate-500 text-sm">Regras de contratação com Auto-Importação de Dados do ETP</p>
+        <header className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold text-green-900">Fase 3: Termo de Referência (TR)</h1>
+            <p className="text-slate-500 text-sm">Regras de contratação com Auto-Importação de Dados do ETP</p>
+          </div>
+          {/* BOTÃO DE LIMPEZA */}
+          <button 
+            type="button" 
+            onClick={limparMemoria}
+            className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-md font-bold transition-colors border border-red-200 shadow-sm"
+          >
+            🗑️ Limpar Dados Importados
+          </button>
         </header>
         
         <form onSubmit={handleSubmit} className="space-y-6">
