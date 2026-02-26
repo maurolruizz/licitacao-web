@@ -31,14 +31,13 @@ export const licitacaoService = {
     return response.json();
   },
 
-  // NOVO: CONEXÃO COM A FASE 4 (PNCP) - REGRESSÃO ZERO
   buscarPrecosPNCP: async (palavraChave: string) => {
     const response = await fetch(`${API_URL}/pesquisa-pncp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ palavra_chave: palavraChave }),
     });
-    if (!response.ok) throw new Error('Erro ao buscar preços no PNCP (Mock)');
+    if (!response.ok) throw new Error('Erro ao buscar preços no PNCP');
     return response.json();
   }
 };
