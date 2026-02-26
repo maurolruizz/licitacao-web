@@ -5,28 +5,23 @@ import { licitacaoService } from '../services/licitacaoService';
 import Link from 'next/link';
 
 export default function Home() {
-  // Estados do Formulário Original
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // NOVOS ESTADOS: Escudo Jurídico e Governança
   const [motivacaoHumana, setMotivacaoHumana] = useState('');
   const [pca, setPca] = useState('Sim');
   
-  // ESTADOS DO MODAL DE RESPONSABILIZAÇÃO
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
   const [dadosFormulario, setDadosFormulario] = useState<FormData | null>(null);
 
-  // PASSO 1: Abre o Modal em vez de enviar direto
   const prepararEnvio = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setDadosFormulario(new FormData(e.currentTarget));
     setModalAberto(true);
   };
 
-  // PASSO 2: O Envio Real após a Assinatura (Regressão Zero API)
   const executarEnvioBlindado = async () => {
     if (!dadosFormulario) return;
     
@@ -34,7 +29,6 @@ export default function Home() {
     setLoading(true);
     setErro(null);
 
-    // HACK DE REGRESSÃO ZERO: Empacotando os novos campos na variável que o Python já aceita
     const justificativaEnriquecida = `
       ATENÇÃO IA - MOTIVAÇÃO FÁTICA DO GESTOR (NÃO ALTERAR O NÚCLEO DESTE TEXTO): "${motivacaoHumana}".
       STATUS PCA: A contratação está prevista no PCA? ${pca}.
@@ -64,28 +58,35 @@ export default function Home() {
     const footer = "</body></html>";
     const htmlText = resultado.texto_oficial.split('\n').map((line: string) => `<p style="font-family: Arial, sans-serif; font-size: 12pt; text-align: justify; line-height: 1.5;">${line}</p>`).join('');
     const sourceHTML = header + htmlText + footer;
-    const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+    const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
     const fileDownload = document.createElement("a");
-    document.body.appendChild(fileDownload);
-    fileDownload.href = source;
+    fileDownload.href = url;
     fileDownload.download = 'DFD_Oficial_GovTech.doc';
+    document.body.appendChild(fileDownload);
     fileDownload.click();
     document.body.removeChild(fileDownload);
+    URL.revokeObjectURL(url);
   };
 
   return (
     <main className="min-h-screen bg-slate-50 p-8 font-sans text-slate-900 relative">
       <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-8 border border-slate-200">
         
-        {/* CABEÇALHO DE GOVERNANÇA */}
         <div className="mb-6 bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono text-center tracking-wider">
           SISTEMA DE APOIO À DECISÃO - LEI 14.133/2021
         </div>
 
-        <nav className="mb-6 text-sm font-medium space-x-4 border-b pb-4">
-          <span className="text-blue-600 font-bold">Módulo DFD</span>
-          <Link href="/etp" className="text-slate-500 hover:text-blue-600 transition-colors">ETP →</Link>
-          <Link href="/tr" className="text-slate-500 hover:text-green-600 transition-colors">TR →</Link>
+        {/* =========================================================
+            NOVA BARRA DE NAVEGAÇÃO GLOBAL (INTERLIGAÇÃO DAS FASES)
+            ========================================================= */}
+        <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
+          <span className="text-blue-700 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-md shadow-sm">1. Módulo DFD</span>
+          <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">2. Módulo ETP →</Link>
+          <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
+          <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all flex items-center gap-2">
+            4. Pesquisa PNCP (IN 65) <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase shadow-sm">Novo</span>
+          </Link>
         </nav>
 
         <header className="mb-8">
@@ -110,7 +111,6 @@ export default function Home() {
             <input name="objeto" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Notebooks de alto desempenho" />
           </div>
 
-          {/* NOVA ÁREA DE BLINDAGEM: PCA */}
           <div className="flex flex-col p-4 bg-slate-50 border border-slate-200 rounded-md">
             <label className="text-sm font-bold text-slate-800 mb-2">A Contratação está prevista no PCA (Plano de Contratações Anual)?</label>
             <div className="flex gap-4">
@@ -125,7 +125,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* NOVA ÁREA DE BLINDAGEM: MOTIVAÇÃO HUMANA (ART. 11) */}
           <div className="flex flex-col border-l-4 border-blue-600 pl-4 py-2">
             <label className="text-sm font-bold text-slate-800 mb-1">Motivação Administrativa (Art. 11)</label>
             <p className="text-xs text-slate-500 mb-2">Descreva com suas palavras o motivo fático desta compra. A IA usará este texto como núcleo inalterável.</p>
@@ -164,7 +163,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* MODAL DE RESPONSABILIDADE JURÍDICA (RISCO ZERO) */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
@@ -188,19 +186,8 @@ export default function Home() {
             </div>
 
             <div className="flex gap-3 justify-end">
-              <button 
-                onClick={() => setModalAberto(false)}
-                className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md transition-colors"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={executarEnvioBlindado}
-                disabled={!termoAceito}
-                className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm"
-              >
-                Confirmar e Gerar
-              </button>
+              <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md transition-colors">Cancelar</button>
+              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm">Confirmar e Gerar</button>
             </div>
           </div>
         </div>

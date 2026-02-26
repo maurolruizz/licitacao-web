@@ -9,7 +9,6 @@ export default function PaginaETP() {
   const [especificacao, setEspecificacao] = useState('');
   const [requisitos, setRequisitos] = useState('');
   
-  // NOVOS ESTADOS: Escudo Jurídico
   const [motivacaoHumana, setMotivacaoHumana] = useState('');
   const [pca, setPca] = useState('Sim');
 
@@ -21,7 +20,6 @@ export default function PaginaETP() {
   const [radarResultado, setRadarResultado] = useState<string | null>(null);
   const [riscos, setRiscos] = useState<any[]>([]);
 
-  // ESTADOS DO MODAL
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
 
@@ -71,11 +69,9 @@ export default function PaginaETP() {
     setResultado(null);
     setRiscos([]);
 
-    // Single Source of Truth para o TR
     localStorage.setItem('licitacao_objeto', objeto);
     localStorage.setItem('licitacao_especificacao', especificacao);
 
-    // HACK REGRESSÃO ZERO: Mesclando os dados fáticos do humano para a IA
     const necessidadeEnriquecida = `
       ATENÇÃO IA - MOTIVAÇÃO FÁTICA DO GESTOR (ART 11): "${motivacaoHumana}".
       STATUS PCA: Previsto no PCA? ${pca}.
@@ -106,13 +102,17 @@ export default function PaginaETP() {
     let textoLimpo = resultado.texto_oficial.replace(/\*\*/g, '').replace(/### /g, '').replace(/## /g, '');
     const htmlText = textoLimpo.split('\n').map((line: string) => `<p style="font-family: Arial, sans-serif; font-size: 12pt; text-align: justify; line-height: 1.5;">${line}</p>`).join('');
     const sourceHTML = header + htmlText + footer;
-    const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+    
+    // Motor BLOB 100% Seguro
+    const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
     const fileDownload = document.createElement("a");
-    document.body.appendChild(fileDownload);
-    fileDownload.href = source;
+    fileDownload.href = url;
     fileDownload.download = 'ETP_Oficial.doc';
+    document.body.appendChild(fileDownload);
     fileDownload.click();
     document.body.removeChild(fileDownload);
+    URL.revokeObjectURL(url);
   };
 
   const step1Valid = motivacaoHumana.length > 5;
@@ -127,10 +127,16 @@ export default function PaginaETP() {
           SISTEMA DE APOIO À DECISÃO E GOVERNANÇA - LEI 14.133/2021
         </div>
 
-        <nav className="mb-6 text-sm font-medium space-x-4 border-b pb-4 border-slate-300">
-          <Link href="/" className="text-slate-500 hover:text-blue-600 transition-colors">← Voltar para DFD</Link>
-          <span className="text-blue-600 font-bold">Módulo ETP (Assistente Estratégico)</span>
-          <Link href="/tr" className="text-slate-500 hover:text-green-600 transition-colors">Avançar para TR →</Link>
+        {/* =========================================================
+            NOVA BARRA DE NAVEGAÇÃO GLOBAL
+            ========================================================= */}
+        <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-300 items-center">
+          <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. Módulo DFD</Link>
+          <span className="text-blue-800 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-md shadow-sm">2. Módulo ETP</span>
+          <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
+          <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all flex items-center gap-2">
+            4. Pesquisa PNCP (IN 65) →
+          </Link>
         </nav>
 
         <header className="mb-8">
@@ -251,7 +257,6 @@ export default function PaginaETP() {
         </div>
       </div>
 
-      {/* MODAL DE RESPONSABILIDADE JURÍDICA */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">

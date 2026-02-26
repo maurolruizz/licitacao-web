@@ -20,7 +20,6 @@ export default function PaginaTR() {
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // 🧹 FUNÇÃO NOVA: Limpa a memória do navegador (Regressão Zero)
   const limparMemoria = () => {
     localStorage.removeItem('licitacao_objeto');
     localStorage.removeItem('licitacao_especificacao');
@@ -60,13 +59,17 @@ export default function PaginaTR() {
     const footer = "</body></html>";
     const htmlText = resultado.texto_oficial.split('\n').map((line: string) => `<p style="font-family: Arial, sans-serif; font-size: 12pt; text-align: justify; line-height: 1.5;">${line}</p>`).join('');
     const sourceHTML = header + htmlText + footer;
-    const source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+    
+    // Motor BLOB para download 100% seguro (Regressão Zero)
+    const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
     const fileDownload = document.createElement("a");
-    document.body.appendChild(fileDownload);
-    fileDownload.href = source;
+    fileDownload.href = url;
     fileDownload.download = 'Termo_de_Referencia_Oficial.doc';
+    document.body.appendChild(fileDownload);
     fileDownload.click();
     document.body.removeChild(fileDownload);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -77,10 +80,16 @@ export default function PaginaTR() {
           SISTEMA DE APOIO À DECISÃO E GOVERNANÇA - LEI 14.133/2021
         </div>
 
-        <nav className="mb-6 text-sm font-medium space-x-4 border-b pb-4">
-          <Link href="/" className="text-slate-500 hover:text-green-600 transition-colors">← Voltar para DFD</Link>
-          <Link href="/etp" className="text-slate-500 hover:text-green-600 transition-colors">← Voltar para ETP</Link>
-          <span className="text-green-700 font-bold">Módulo TR</span>
+        {/* =========================================================
+            NOVA BARRA DE NAVEGAÇÃO GLOBAL
+            ========================================================= */}
+        <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
+          <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. Módulo DFD</Link>
+          <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. Módulo ETP</Link>
+          <span className="text-green-800 font-bold bg-green-50 border border-green-200 px-3 py-1.5 rounded-md shadow-sm">3. Módulo TR</span>
+          <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all flex items-center gap-2">
+            4. Pesquisa PNCP (IN 65) →
+          </Link>
         </nav>
         
         <header className="mb-8 flex justify-between items-start">
@@ -88,7 +97,6 @@ export default function PaginaTR() {
             <h1 className="text-2xl font-bold text-green-900">Fase 3: Termo de Referência (TR)</h1>
             <p className="text-slate-500 text-sm">Regras de contratação com Auto-Importação de Dados do ETP</p>
           </div>
-          {/* BOTÃO DE LIMPEZA */}
           <button 
             type="button" 
             onClick={limparMemoria}
