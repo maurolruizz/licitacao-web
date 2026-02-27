@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 
@@ -9,25 +9,47 @@ export default function PaginaETP() {
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // 1. MEMÓRIA RESTAURADA (Regressão Zero: Especificações e Requisitos voltaram)
+  // MEMÓRIA RESTAURADA (Regressão Zero)
   const [objeto, setObjeto] = useState('');
   const [necessidade, setNecessidade] = useState('');
   const [especificacao, setEspecificacao] = useState('');
   const [requisitos, setRequisitos] = useState('');
   
-  // 2. MEMÓRIA DA MATRIZ DO ART 18 (Compliance)
+  // MATRIZ DE ALTERNATIVAS + TCO (Sprint 4)
   const [alternativa1, setAlternativa1] = useState('');
   const [alternativa2, setAlternativa2] = useState('');
   const [justificativa, setJustificativa] = useState('');
+  const [criterioDesempate, setCriterioDesempate] = useState('');
+  
+  // MATRIZ QUANTIFICADA DE RISCOS 3x3 (Sprint 4)
   const [risco, setRisco] = useState('');
   const [mitigacao, setMitigacao] = useState('');
+  const [probabilidade, setProbabilidade] = useState('');
+  const [impacto, setImpacto] = useState('');
 
-  // 3. MOTOR DO RADAR RESTAURADO
   const [radarLoading, setRadarLoading] = useState(false);
   const [radarResultado, setRadarResultado] = useState<string | null>(null);
-
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
+
+  // CÁLCULO AUTOMÁTICO DE CLASSIFICAÇÃO (HEATMAP)
+  const classificacaoRisco = useMemo(() => {
+    if (!probabilidade || !impacto) return 'Não Avaliado';
+    if (probabilidade === 'Alta' && impacto === 'Alto') return 'Risco Crítico';
+    if ((probabilidade === 'Alta' && impacto === 'Médio') || (probabilidade === 'Média' && impacto === 'Alto')) return 'Risco Alto';
+    if (probabilidade === 'Baixa' && impacto === 'Baixo') return 'Risco Baixo';
+    return 'Risco Médio';
+  }, [probabilidade, impacto]);
+
+  const getCorClassificacao = () => {
+    switch(classificacaoRisco) {
+      case 'Risco Crítico': return 'bg-red-600 text-white border-red-800';
+      case 'Risco Alto': return 'bg-orange-500 text-white border-orange-700';
+      case 'Risco Médio': return 'bg-yellow-400 text-yellow-900 border-yellow-600';
+      case 'Risco Baixo': return 'bg-green-500 text-white border-green-700';
+      default: return 'bg-slate-200 text-slate-500 border-slate-300';
+    }
+  };
 
   const buscarRadar = () => {
     if (!objeto || !especificacao) {
@@ -64,7 +86,6 @@ export default function PaginaETP() {
     localStorage.setItem('licitacao_objeto', objeto);
     localStorage.setItem('licitacao_especificacao', especificacao);
 
-    // Empacotando Especificação e Requisitos dentro da Necessidade para o Python processar
     const necessidadeEnriquecida = `${necessidade}\n\nEspecificações Preliminares: ${especificacao}\nRequisitos Adicionais: ${requisitos}`;
 
     const payload = {
@@ -73,8 +94,12 @@ export default function PaginaETP() {
       alternativa_1: alternativa1 || 'Não informada',
       alternativa_2: alternativa2 || 'Não informada',
       justificativa_escolha: justificativa || 'Não informada',
+      criterio_desempate: criterioDesempate || 'Não selecionado',
       risco_principal: risco || 'Não selecionado',
-      mitigacao: mitigacao || 'Não selecionada'
+      mitigacao: mitigacao || 'Não selecionada',
+      probabilidade: probabilidade || 'Não avaliada',
+      impacto: impacto || 'Não avaliado',
+      classificacao_risco: classificacaoRisco
     };
 
     try {
@@ -117,11 +142,12 @@ export default function PaginaETP() {
           <span className="text-blue-800 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-md shadow-sm">2. Módulo ETP</span>
           <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
           <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. Pesquisa PNCP →</Link>
+          <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
 
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-blue-900">Estudo Técnico Preliminar (ETP)</h1>
-          <p className="text-slate-600 mt-1">Matriz de Alternativas, Riscos e Radar Estratégico (Art. 18, §1º)</p>
+          <p className="text-slate-600 mt-1">Matriz de Alternativas, Riscos Quantificados e Hash Absoluto (Art. 18, §1º)</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -141,7 +167,7 @@ export default function PaginaETP() {
                   <textarea value={necessidade} onChange={(e) => setNecessidade(e.target.value)} required rows={2} className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" placeholder="Qual a finalidade pública desta compra?" />
                 </div>
                 
-                {/* O Radar que havia sido perdido */}
+                {/* O Radar Totalmente Restaurado */}
                 <div className="flex flex-col border-l-4 border-amber-400 pl-4 py-3 bg-amber-50/30 rounded-r-md mt-4">
                   <label className="text-sm font-bold text-slate-800 mb-2">Especificações Técnicas Preliminares (Alimenta o TR e o Radar)</label>
                   <textarea value={especificacao} onChange={(e) => setEspecificacao(e.target.value)} required rows={3} className="p-3 border border-amber-200 rounded-md outline-none focus:ring-2 focus:ring-amber-500 bg-white" placeholder="Ex: Processador i7, 16GB RAM..." />
@@ -164,47 +190,87 @@ export default function PaginaETP() {
                 </div>
               </div>
 
-              {/* BLOCO 2: ALTERNATIVAS (Compliance Art 18) */}
+              {/* BLOCO 2: ALTERNATIVAS E TCO (Sprint 4) */}
               <div className="space-y-4 bg-blue-50/50 p-5 rounded-lg border border-blue-100">
-                <h3 className="font-bold text-blue-900 border-b border-blue-200 pb-2">2. Análise de Alternativas de Mercado</h3>
+                <h3 className="font-bold text-blue-900 border-b border-blue-200 pb-2">2. Lógica Comparativa (Matriz de Alternativas)</h3>
                 <div className="flex flex-col">
                   <label className="text-sm font-semibold mb-1 text-slate-700">Cenário 1: Solução Padrão (Ex: Compra)</label>
-                  <input value={alternativa1} onChange={(e) => setAlternativa1(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Descreva a primeira alternativa..." />
+                  <input value={alternativa1} onChange={(e) => setAlternativa1(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Descreva a primeira alternativa..." />
                 </div>
                 <div className="flex flex-col">
                   <label className="text-sm font-semibold mb-1 text-slate-700">Cenário 2: Solução Alternativa (Ex: Locação)</label>
-                  <input value={alternativa2} onChange={(e) => setAlternativa2(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Descreva uma alternativa viável..." />
+                  <input value={alternativa2} onChange={(e) => setAlternativa2(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Descreva uma alternativa viável..." />
                 </div>
+                
                 <div className="flex flex-col mt-4">
-                  <label className="text-sm font-bold text-blue-800 mb-1">Justificativa da Solução Escolhida</label>
-                  <textarea value={justificativa} onChange={(e) => setJustificativa(e.target.value)} required rows={2} className="p-3 border border-blue-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Por que o Cenário escolhido é o mais vantajoso?" />
+                  <label className="text-sm font-bold text-blue-800 mb-1">Critério Predominante de Escolha (Desempate)</label>
+                  <select required value={criterioDesempate} onChange={(e) => setCriterioDesempate(e.target.value)} className="p-3 border border-blue-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white font-semibold">
+                    <option value="" disabled>Selecione o critério decisório...</option>
+                    <option value="Menor Custo Total de Propriedade (TCO - Econômico)">Econômico (Menor Custo Total - TCO)</option>
+                    <option value="Maior Vantagem Técnica e Qualidade (Técnico)">Técnico (Maior Qualidade/Eficiência)</option>
+                    <option value="Padronização e Facilidade de Suporte (Operacional)">Operacional (Padronização de Parque)</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col mt-4">
+                  <label className="text-sm font-bold text-blue-800 mb-1">Justificativa Detalhada da Solução Escolhida</label>
+                  <textarea value={justificativa} onChange={(e) => setJustificativa(e.target.value)} required rows={3} className="p-3 border border-blue-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Por que o Cenário escolhido é o mais vantajoso?" />
                 </div>
               </div>
 
-              {/* BLOCO 3: RISCOS ESTRUTURADOS */}
+              {/* BLOCO 3: MATRIZ QUANTIFICADA DE RISCOS (3x3) (Sprint 4) */}
               <div className="space-y-4">
-                <h3 className="font-bold text-slate-800 border-b pb-2">3. Gerenciamento de Riscos Preliminar</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="font-bold text-slate-800 border-b pb-2">3. Matriz Quantificada de Riscos (3x3)</h3>
+                
+                <div className="flex flex-col mb-4">
+                  <label className="text-sm font-semibold mb-1">Risco Principal Mapeado</label>
+                  <select required value={risco} onChange={(e) => setRisco(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="" disabled>Selecione um risco...</option>
+                    <option value="Fracasso ou deserção da licitação">Licitação deserta/fracassada</option>
+                    <option value="Atraso na entrega do objeto pelo fornecedor">Atraso na entrega</option>
+                    <option value="Entrega de produto com qualidade inferior à especificada">Qualidade inferior à exigida</option>
+                    <option value="Superfaturamento ou sobrepreço">Sobrepreço</option>
+                  </select>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div className="flex flex-col">
-                    <label className="text-sm font-semibold mb-1">Risco Principal</label>
-                    <select required value={risco} onChange={(e) => setRisco(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                      <option value="" disabled>Selecione um risco...</option>
-                      <option value="Fracasso ou deserção da licitação">Licitação deserta/fracassada</option>
-                      <option value="Atraso na entrega do objeto pelo fornecedor">Atraso na entrega</option>
-                      <option value="Entrega de produto com qualidade inferior à especificada">Qualidade inferior à exigida</option>
-                      <option value="Superfaturamento ou sobrepreço">Sobrepreço</option>
+                    <label className="text-sm font-semibold mb-1">Probabilidade de Ocorrência</label>
+                    <select required value={probabilidade} onChange={(e) => setProbabilidade(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                      <option value="" disabled>Selecione...</option>
+                      <option value="Alta">Alta</option>
+                      <option value="Média">Média</option>
+                      <option value="Baixa">Baixa</option>
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label className="text-sm font-semibold mb-1">Ação de Mitigação</label>
-                    <select required value={mitigacao} onChange={(e) => setMitigacao(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                      <option value="" disabled>Selecione a mitigação...</option>
-                      <option value="Realizar ampla e rigorosa pesquisa de preços de mercado">Ampla pesquisa de preços</option>
-                      <option value="Estabelecer cronograma de entrega rígido com multas no TR">Cronograma rígido e multas</option>
-                      <option value="Exigir amostra ou certificação técnica na fase de aceitação">Exigência de certificação técnica</option>
-                      <option value="Parcelamento do objeto para aumentar a competitividade">Parcelamento do objeto</option>
+                    <label className="text-sm font-semibold mb-1">Impacto (Dano ao Órgão)</label>
+                    <select required value={impacto} onChange={(e) => setImpacto(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                      <option value="" disabled>Selecione...</option>
+                      <option value="Alto">Alto</option>
+                      <option value="Médio">Médio</option>
+                      <option value="Baixo">Baixo</option>
                     </select>
                   </div>
+                </div>
+
+                {/* VISUAL HEATMAP */}
+                <div className="bg-slate-100 p-4 rounded-md flex justify-between items-center border border-slate-300 mb-4 shadow-inner">
+                  <span className="font-bold text-slate-700 text-sm">Classificação Automática (Heatmap):</span>
+                  <span className={`px-4 py-2 rounded-md font-bold text-sm border shadow-sm ${getCorClassificacao()}`}>
+                    {classificacaoRisco}
+                  </span>
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="text-sm font-semibold mb-1">Ação Preventiva/Mitigação</label>
+                  <select required value={mitigacao} onChange={(e) => setMitigacao(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <option value="" disabled>Selecione a mitigação...</option>
+                    <option value="Realizar ampla e rigorosa pesquisa de preços de mercado">Ampla pesquisa de preços</option>
+                    <option value="Estabelecer cronograma de entrega rígido com multas no TR">Cronograma rígido e multas</option>
+                    <option value="Exigir amostra ou certificação técnica na fase de aceitação">Exigência de certificação técnica</option>
+                    <option value="Parcelamento do objeto para aumentar a competitividade">Parcelamento do objeto</option>
+                  </select>
                 </div>
               </div>
 
@@ -226,34 +292,36 @@ export default function PaginaETP() {
             )}
           </div>
 
+          {/* O CHECKLIST LATERAL RESTAURADO */}
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 sticky top-6">
-              <h3 className="font-bold text-slate-800 mb-4">🛡️ Checklist do Art. 18</h3>
+              <h3 className="font-bold text-slate-800 mb-4 border-b pb-2">🛡️ Checklist do Art. 18</h3>
               <ul className="space-y-4 text-sm">
                 <li className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${necessidade ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{necessidade ? '✓' : '1'}</div>
-                  <div className={necessidade ? 'text-slate-800' : 'text-slate-500'}><strong>Descrição e Objeto</strong></div>
+                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${necessidade && especificacao ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{necessidade && especificacao ? '✓' : '1'}</div>
+                  <div className={necessidade && especificacao ? 'text-slate-800' : 'text-slate-500'}><strong>Descrição e Objeto</strong><br/><span className="text-xs">Incluindo especificações.</span></div>
                 </li>
                 <li className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${alternativa1 && justificativa ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{alternativa1 && justificativa ? '✓' : '2'}</div>
-                  <div className={alternativa1 && justificativa ? 'text-slate-800' : 'text-slate-500'}><strong>Matriz de Alternativas</strong></div>
+                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${criterioDesempate ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{criterioDesempate ? '✓' : '2'}</div>
+                  <div className={criterioDesempate ? 'text-slate-800' : 'text-slate-500'}><strong>Matriz de Alternativas</strong><br/><span className="text-xs">Cenários e TCO avaliados.</span></div>
                 </li>
                 <li className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${risco ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{risco ? '✓' : '3'}</div>
-                  <div className={risco ? 'text-slate-800' : 'text-slate-500'}><strong>Mapa de Riscos</strong></div>
+                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${classificacaoRisco !== 'Não Avaliado' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{classificacaoRisco !== 'Não Avaliado' ? '✓' : '3'}</div>
+                  <div className={classificacaoRisco !== 'Não Avaliado' ? 'text-slate-800' : 'text-slate-500'}><strong>Matriz de Riscos 3x3</strong><br/><span className="text-xs">Probabilidade x Impacto.</span></div>
                 </li>
               </ul>
             </div>
           </div>
+          
         </div>
       </div>
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Termo de Responsabilidade Técnica - ETP</h3>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Selo de Hash Absoluto - ETP</h3>
             <p className="text-sm text-slate-600 mb-4 text-justify">
-              O sistema consolidou a sua Análise de Alternativas e Mapa de Riscos. A decisão da contratação e a pesquisa de mercado preliminar são de sua inteira responsabilidade (Art. 18, Lei 14.133/2021).
+              O sistema consolidou a sua Matriz de Alternativas (TCO) e a sua Matriz Quantificada de Riscos. A decisão técnica é de sua inteira responsabilidade.
             </p>
             
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
@@ -265,14 +333,14 @@ export default function PaginaETP() {
                   className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300"
                 />
                 <span className="text-sm font-semibold text-slate-800 text-justify">
-                  Declaro que revisei os cenários inseridos e atesto a viabilidade desta contratação. Autorizo a geração do Hash de Auditoria.
+                  Declaro que revisei os cenários inseridos e atesto a viabilidade. Autorizo a gravação das variáveis no Hash de Auditoria.
                 </span>
               </label>
             </div>
 
             <div className="flex gap-3 justify-end">
               <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md transition-colors">Cancelar</button>
-              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm">Atestar Viabilidade e Gerar ETP</button>
+              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm">Atestar e Gravar Hash</button>
             </div>
           </div>
         </div>

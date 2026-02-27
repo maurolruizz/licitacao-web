@@ -9,10 +9,14 @@ export default function Home() {
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // DECLARAÇÃO DE MEMÓRIA (Isso resolve a tela vermelha "is not defined")
+  // MEMÓRIA COMPLETA
   const [origem, setOrigem] = useState('');
   const [impacto, setImpacto] = useState('');
   const [pca, setPca] = useState('Sim');
+  
+  // NOVOS CAMPOS DO SPRINT 4 (Governança PCA)
+  const [numeroPca, setNumeroPca] = useState('');
+  const [justificativaPca, setJustificativaPca] = useState('');
   
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
@@ -31,14 +35,16 @@ export default function Home() {
     setLoading(true);
     setErro(null);
 
-    // BLINDAGEM ANTI-422: Empacotamento exato para o Python
+    // BLINDAGEM ANTI-422 com Hash Absoluto
     const payload = {
       setor_requisitante: (dadosFormulario.get('setor') || '').toString(),
       objeto_da_compra: (dadosFormulario.get('objeto') || '').toString(),
       quantidade_estimada: Number(dadosFormulario.get('quantidade')) || 1,
       origem_necessidade: origem || 'Não selecionada',
       impacto_institucional: impacto || 'Não selecionado',
-      previsao_pca: pca
+      previsao_pca: pca,
+      numero_pca: pca === 'Sim' ? numeroPca : '',
+      justificativa_pca: pca === 'Não' ? justificativaPca : ''
     };
 
     try {
@@ -81,11 +87,12 @@ export default function Home() {
           <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">2. Módulo ETP →</Link>
           <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
           <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. Pesquisa PNCP →</Link>
+          <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
 
         <header className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900">Fase 1: Formalização de Demanda (DFD)</h1>
-          <p className="text-slate-500 text-sm">Estruturação guiada para blindagem institucional.</p>
+          <p className="text-slate-500 text-sm">Estruturação guiada para blindagem institucional com Hash Absoluto.</p>
         </header>
         
         <form onSubmit={prepararEnvio} className="space-y-6">
@@ -105,7 +112,6 @@ export default function Home() {
             <input name="objeto" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de Veículos Utilitários" />
           </div>
 
-          {/* NOVOS CAMPOS ESTRUTURADOS */}
           <div className="flex flex-col p-5 bg-blue-50 border border-blue-200 rounded-md">
             <label className="text-sm font-bold text-slate-800 mb-3">Origem Técnica da Necessidade</label>
             <select 
@@ -136,22 +142,48 @@ export default function Home() {
             </select>
           </div>
 
-          <div className="flex flex-col p-4 bg-slate-50 border border-slate-200 rounded-md">
-            <label className="text-sm font-bold text-slate-800 mb-2">A Contratação está prevista no PCA?</label>
-            <div className="flex gap-4">
+          {/* GOVERNANÇA PCA RESTAURADA E EXPANDIDA */}
+          <div className="flex flex-col p-5 bg-slate-50 border border-slate-300 rounded-md">
+            <label className="text-sm font-bold text-slate-800 mb-2">A Contratação está prevista no PCA (Plano de Contratações Anual)?</label>
+            <div className="flex gap-4 mb-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="pca" value="Sim" checked={pca === 'Sim'} onChange={(e) => setPca(e.target.value)} className="w-4 h-4 text-blue-600" />
-                <span className="text-sm">Sim, prevista</span>
+                <span className="text-sm font-semibold">Sim, prevista</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="pca" value="Não" checked={pca === 'Não'} onChange={(e) => setPca(e.target.value)} className="w-4 h-4 text-blue-600" />
-                <span className="text-sm">Não (Requererá justificativa de exceção)</span>
+                <span className="text-sm font-semibold">Não (Inclusão Superveniente)</span>
               </label>
             </div>
+
+            {pca === 'Sim' ? (
+              <div className="flex flex-col transition-all duration-300">
+                <label className="text-xs font-semibold mb-1 text-slate-600">Número/ID do Item no PCA</label>
+                <input 
+                  value={numeroPca} 
+                  onChange={(e) => setNumeroPca(e.target.value)} 
+                  required 
+                  className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
+                  placeholder="Ex: Item 45 do PCA 2026" 
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col transition-all duration-300">
+                <label className="text-xs font-semibold mb-1 text-red-600">Justificativa Técnica para Inclusão Extraordinária (Fora do PCA)</label>
+                <textarea 
+                  value={justificativaPca} 
+                  onChange={(e) => setJustificativaPca(e.target.value)} 
+                  required 
+                  rows={2} 
+                  className="p-3 border border-red-200 rounded-md outline-none focus:ring-2 focus:ring-red-500 bg-white" 
+                  placeholder="Justifique a urgência ou determinação legal para esta inclusão..." 
+                />
+              </div>
+            )}
           </div>
 
           <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-md hover:bg-slate-800 disabled:bg-slate-400 transition-all shadow-md">
-            {loading ? 'Aplicando Motor de Governança...' : 'Gerar DFD Auditável'}
+            {loading ? 'Gerando Hash Absoluto...' : 'Gerar DFD Auditável'}
           </button>
         </form>
 
@@ -175,9 +207,9 @@ export default function Home() {
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Selo de Autoria e Responsabilidade</h3>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Assinatura de Hash Absoluto</h3>
             <p className="text-sm text-slate-600 mb-4 text-justify">
-              O sistema traduziu as suas seleções fáticas para a linguagem jurídica formal. Ao confirmar, um Hash imutável será gerado no documento para fins de auditoria do TCE/TCU.
+              O Hash gerado a partir deste momento vinculará <strong>todas as variáveis inseridas no formulário</strong>, garantindo proteção contra reprocessamento posterior.
             </p>
             
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
@@ -189,14 +221,14 @@ export default function Home() {
                   className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300"
                 />
                 <span className="text-sm font-semibold text-slate-800 text-justify">
-                  Declaro que as informações selecionadas condizem com a realidade administrativa e assumo a responsabilidade técnica perante o Art. 11 da Lei 14.133/2021.
+                  Declaro sob as penas da lei a veracidade dos dados (Art. 11) e autorizo a geração do Hash de Governança.
                 </span>
               </label>
             </div>
 
             <div className="flex gap-3 justify-end">
               <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md transition-colors">Cancelar</button>
-              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm">Confirmar e Assinar Eletronicamente</button>
+              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm">Confirmar e Assinar</button>
             </div>
           </div>
         </div>
