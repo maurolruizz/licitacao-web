@@ -1,5 +1,10 @@
-// Forçando conexão com o Cérebro Local para testes (Regressão Zero)
-const API_URL = 'http://localhost:8000/api/v1';
+// ROTEADOR INTELIGENTE (Regressão Zero)
+// Detecta automaticamente se o usuário está no Localhost ou na Vercel (Nuvem)
+const isProducao = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+
+const API_URL = isProducao 
+  ? 'https://licitacao-ai-core.onrender.com/api/v1' 
+  : 'http://localhost:8000/api/v1';
 
 export const licitacaoService = {
   gerarDFD: async (dados: any) => {
@@ -38,7 +43,7 @@ export const licitacaoService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ palavra_chave: palavraChave }),
     });
-    if (!response.ok) throw new Error('Erro ao buscar preços no PNCP');
+    if (!response.ok) throw new Error('Erro ao buscar preços na IN 65');
     return response.json();
   }
 };
