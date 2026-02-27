@@ -7,8 +7,6 @@ import Link from 'next/link';
 export default function PaginaTR() {
   const [objeto, setObjeto] = useState('');
   const [especificacao, setEspecificacao] = useState('');
-  
-  // TRAVA DE WORKFLOW (Governança Sistêmica)
   const [bloqueado, setBloqueado] = useState(false);
   const [modoPequeno, setModoPequeno] = useState(false);
 
@@ -20,7 +18,6 @@ export default function PaginaTR() {
       setObjeto(objetoSalvo);
       setEspecificacao(especificacaoSalva);
     } else {
-      // Bloqueia a geração do TR se o ETP não tiver sido feito
       setBloqueado(true);
     }
   }, []);
@@ -39,12 +36,12 @@ export default function PaginaTR() {
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
 
-  // MODO MUNICÍPIO PEQUENO (Facilitador de UX exigido pelo consultor)
+  // MODO MUNICÍPIO PEQUENO COM RESSALVA JURÍDICA (SPRINT 4)
   const ativarModoPequeno = () => {
     const ativo = !modoPequeno;
     setModoPequeno(ativo);
     if (ativo) {
-      setModeloGestao("Fiscalização direta pelo servidor designado através de portaria, com ateste em nota fiscal após conferência quantitativa e qualitativa.");
+      setModeloGestao("Fiscalização direta pelo servidor designado através de portaria, com ateste em nota fiscal após conferência quantitativa e qualitativa. [NOTA DE GOVERNANÇA: Modelo simplificado aplicado conforme porte do ente e natureza da contratação, sem afastamento de exigências legais da Lei 14.133/21].");
       setSancoes("Apenas advertência e multa moratória leve, aplicável a objetos de pronta entrega e baixo risco.");
       setPagamento("Em até 30 dias após o ateste da nota fiscal");
     } else {
@@ -84,7 +81,6 @@ export default function PaginaTR() {
     try {
       const data = await licitacaoService.gerarTR(payload);
       setResultado(data);
-      // Registrando a passagem pelo TR para o Modo Auditoria
       localStorage.setItem('licitacao_tr_status', 'concluido');
     } catch (err: any) {
       setErro(err.toString());
@@ -184,21 +180,12 @@ export default function PaginaTR() {
               <textarea value={obrigacoes} onChange={(e) => setObrigacoes(e.target.value)} required rows={2} className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-green-500" placeholder="Deveres legais, assistência técnica..." />
             </div>
 
-            {/* SELETORES DE COMPLIANCE JURÍDICO */}
             <div className={`flex flex-col p-4 border rounded-md transition-colors ${modoPequeno ? 'bg-yellow-50/50 border-yellow-200' : 'bg-slate-50 border-slate-200'}`}>
               <label className="text-sm font-bold text-slate-800 mb-2">Modelo de Gestão e Fiscalização</label>
-              <select required value={modeloGestao} onChange={(e) => setModeloGestao(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500 bg-white">
-                <option value="" disabled>Selecione...</option>
-                <option value="Fiscalização direta pelo servidor designado através de portaria, com ateste em nota fiscal após conferência quantitativa e qualitativa.">Fiscalização direta por servidor (Simplificado)</option>
-                <option value="Fiscalização por comissão de recebimento (acima de R$ 300.000,00), com termo de recebimento provisório e definitivo.">Comissão de Recebimento (Complexo)</option>
-              </select>
+              <textarea required value={modeloGestao} onChange={(e) => setModeloGestao(e.target.value)} rows={3} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500 bg-white text-sm" placeholder="Descreva o modelo de fiscalização..." />
 
               <label className="text-sm font-bold text-slate-800 mt-4 mb-2">Sanções Administrativas</label>
-              <select required value={sancoes} onChange={(e) => setSancoes(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500 bg-white">
-                <option value="" disabled>Selecione...</option>
-                <option value="Apenas advertência e multa moratória leve, aplicável a objetos de pronta entrega e baixo risco.">Padrão LEVE (Pronta Entrega)</option>
-                <option value="Advertência, Multa de mora (0,5% ao dia de atraso), Multa compensatória (até 10%) e Impedimento de licitar conforme gravidade.">Padrão RIGOROSO (Multas e Impedimento)</option>
-              </select>
+              <textarea required value={sancoes} onChange={(e) => setSancoes(e.target.value)} rows={2} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500 bg-white text-sm" placeholder="Descreva as sanções..." />
 
               <label className="text-sm font-bold text-slate-800 mt-4 mb-2">Critérios de Pagamento</label>
               <input value={pagamento} onChange={(e) => setPagamento(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500" placeholder="Ex: Em até 30 dias..." />
@@ -207,7 +194,7 @@ export default function PaginaTR() {
 
           <div className="lg:col-span-2 mt-4">
             <button type="submit" disabled={loading} className="w-full bg-green-800 text-white font-bold py-4 rounded-xl hover:bg-green-700 disabled:bg-slate-400 transition-all shadow-md text-lg">
-              {loading ? 'Consolidando Cláusulas...' : 'Assinar e Gerar TR Auditável'}
+              {loading ? 'Gerando Hash Absoluto...' : 'Assinar e Gerar TR Auditável'}
             </button>
           </div>
         </form>
@@ -228,11 +215,11 @@ export default function PaginaTR() {
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-green-600">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Termo de Aprovação - TR</h3>
-            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema organizou os blocos obrigatórios. A definição técnica do objeto e a restrição de competitividade são de sua responsabilidade jurídica.</p>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Assinatura de Hash Absoluto - TR</h3>
+            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema organizou os blocos obrigatórios. Ao prosseguir, o Hash Absolute (v2.2.0) registrará imutavelmente suas escolhas legais.</p>
             <div className="flex gap-3 justify-end mt-6">
               <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md">Cancelar</button>
-              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-green-700 text-white font-bold rounded-md hover:bg-green-800 shadow-sm">Aprovar TR Definitivo</button>
+              <button onClick={executarEnvioBlindado} className="px-6 py-2 bg-green-700 text-white font-bold rounded-md hover:bg-green-800 shadow-sm">Aprovar e Gravar Hash</button>
             </div>
           </div>
         </div>

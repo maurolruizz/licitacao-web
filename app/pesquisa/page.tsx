@@ -11,9 +11,8 @@ export default function PesquisaPrecos() {
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [modalAberto, setModalAberto] = useState(false);
   
-  // NOVO: MOTOR DE ATUALIZAÇÃO MONETÁRIA (IPCA)
   const [aplicarIpca, setAplicarIpca] = useState(false);
-  const taxaIpca = 1.0452; // Exemplo: 4.52% acumulado nos últimos 12 meses
+  const taxaIpca = 1.0452; 
   const dataCotacaoBase = "Fevereiro/2025";
   const dataAtual = "Fevereiro/2026";
 
@@ -38,11 +37,9 @@ export default function PesquisaPrecos() {
     setSelecionados(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   };
 
-  // MOTOR ESTATÍSTICO (IQR + IPCA ACORPLADO) - Regressão Zero
   const estatisticas = useMemo(() => {
     if (selecionados.length === 0) return null;
 
-    // Aplicação Matemática do IPCA antes do filtro de Outliers
     const itensEscolhidos = resultados.filter(r => selecionados.includes(r.id_compra)).map(r => ({
       ...r,
       valor_original: r.valor_unitario,
@@ -100,6 +97,36 @@ export default function PesquisaPrecos() {
     return Math.abs(hash).toString(16).padStart(16, '0') + Date.now().toString(16);
   };
 
+  // EXPORTAÇÃO CSV PARA AUDITORIA (SPRINT 4)
+  const exportarParaCSV = () => {
+    if (!estatisticas) return;
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "ID Compra,Orgao Comprador,Valor Original,Valor Corrigido IPCA,Status\n";
+    
+    estatisticas.validos.forEach(r => {
+      csvContent += `${r.id_compra},"${r.orgao_comprador}",${r.valor_original},${r.valor_unitario},Valido\n`;
+    });
+    estatisticas.outliers.forEach(r => {
+      csvContent += `${r.id_compra},"${r.orgao_comprador}",${r.valor_original},${r.valor_unitario},Excluido_Outlier\n`;
+    });
+
+    csvContent += `\nMetadados Estatisticos\n`;
+    csvContent += `Q1,${estatisticas.q1}\n`;
+    csvContent += `Q3,${estatisticas.q3}\n`;
+    csvContent += `Limite Inferior,${estatisticas.limiteInferior}\n`;
+    csvContent += `Limite Superior,${estatisticas.limiteSuperior}\n`;
+    csvContent += `Mediana Final Saneada,${estatisticas.medianaFinal}\n`;
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Base_Dados_IN65_Auditavel.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const exportarRelatorioWord = () => {
     if (!estatisticas || estatisticas.qtdValidos < 3) return;
     setModalAberto(false);
@@ -124,8 +151,6 @@ export default function PesquisaPrecos() {
 
     const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
     const hashAudit = gerarHashLocal(`${termo}${estatisticas.medianaFinal}${timestamp}`);
-    
-    // Salvando na memória para a Linha do Tempo de Auditoria (Próximo Passo)
     localStorage.setItem('licitacao_in65_hash', hashAudit);
 
     const blocoIpca = aplicarIpca ? `
@@ -148,7 +173,7 @@ export default function PesquisaPrecos() {
       <h3 style="font-family: Arial; font-size: 12pt; border-bottom: 1px solid #ccc; padding-bottom: 4px;">1. Painel de Amostras Coletadas</h3>
       <table border="1" style="width: 100%; border-collapse: collapse; font-family: Arial; font-size: 10pt; margin-bottom: 20px;">
         <thead style="background-color: #f1f5f9;">
-          <tr><th>Órgão Comprador</th><th>ID (PNCP)</th><th>Valor Base (S/ IPCA)</th><th>Valor Corrigido</th></tr>
+          <tr><th>Órgão Comprador</th><th>ID (PNCP) / Fonte</th><th>Valor Base (S/ IPCA)</th><th>Valor Corrigido</th></tr>
         </thead>
         <tbody>
           ${tabelaValidos}
@@ -159,8 +184,8 @@ export default function PesquisaPrecos() {
       ${blocoIpca}
       
       <h3 style="font-family: Arial; font-size: 12pt; border-bottom: 1px solid #ccc; padding-bottom: 4px;">${aplicarIpca ? '3' : '2'}. Memória de Cálculo e Saneamento (Método IQR)</h3>
-      <p style="font-family: Arial; font-size: 10pt; text-align: justify;">
-        Aplicou-se o método do Intervalo Interquartil (IQR) para identificar e excluir preços outliers que distorceriam o mercado.
+      <p style="font-family: Arial; font-size: 10pt; text-align: justify; background-color: #f0fdf4; padding: 10px; border-left: 4px solid #16a34a; margin-bottom: 10px;">
+        <strong>Fundamentação Metodológica:</strong> Aplica-se o método do Intervalo Interquartil (IQR) por sua robustez estatística contra assimetrias de mercado e pontos fora da curva (outliers). Este método garante a obtenção da tendência central mais fidedigna, em estrita conformidade com as diretrizes e manuais técnicos das Cortes de Contas.
       </p>
       <ul style="font-family: Arial; font-size: 10pt; background-color: #f8fafc; padding: 10px 30px; border: 1px dashed #ccc;">
         <li><strong>Amostras Iniciais:</strong> ${estatisticas.qtdTotal}</li>
@@ -184,7 +209,7 @@ export default function PesquisaPrecos() {
       <br><br>
       <p style="font-family: Arial; font-size: 10pt; text-align: center; color: #666;">======================================================<br>
       <strong>TRILHA DE AUDITORIA E COMPLIANCE (USO EXCLUSIVO TCE/TCU)</strong><br>
-      Motor Estatístico: GovTech-Math Engine v2.1.0 (IQR + IPCA Filter)<br>
+      Motor Estatístico: GovTech-Math Engine v2.2.0 (IQR + IPCA Filter + Data Export)<br>
       Data/Hora da Consolidação: ${timestamp}<br>
       Hash Criptográfico (SHA-256): ${hashAudit}<br>
       ======================================================</p>
@@ -214,11 +239,12 @@ export default function PesquisaPrecos() {
           <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">2. ETP</Link>
           <Link href="/tr" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. TR</Link>
           <span className="text-indigo-800 font-bold bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-md shadow-sm">4. Memória IN 65</span>
+          <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
 
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-indigo-900">Pesquisa de Preços (IN 65)</h1>
-          <p className="text-slate-600 mt-1">Cálculo Matemático Auditável com Exclusão IQR e Correção Monetária (IPCA)</p>
+          <p className="text-slate-600 mt-1">Cálculo Auditável com Defesa Metodológica e Exportação CSV</p>
         </header>
 
         <form onSubmit={buscarPrecos} className="flex gap-4 mb-6">
@@ -228,7 +254,6 @@ export default function PesquisaPrecos() {
           </button>
         </form>
 
-        {/* CONTROLE DE IPCA (Novo) */}
         {resultados.length > 0 && (
           <div className="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between shadow-sm">
             <div>
@@ -297,7 +322,11 @@ export default function PesquisaPrecos() {
                     </div>
 
                     <button onClick={() => setModalAberto(true)} disabled={estatisticas.qtdValidos < 3} className="w-full mt-6 bg-indigo-500 hover:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors disabled:bg-slate-600 shadow-md">
-                      {estatisticas.qtdValidos < 3 ? 'Necessário 3 amostras válidas' : '📄 Homologar IN 65'}
+                      {estatisticas.qtdValidos < 3 ? 'Necessário 3 amostras válidas' : '📄 Homologar IN 65 (Word)'}
+                    </button>
+
+                    <button onClick={exportarParaCSV} disabled={estatisticas.qtdValidos < 3} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl transition-colors disabled:bg-slate-800 border border-slate-600 text-sm">
+                      📥 Exportar Base Dados (CSV)
                     </button>
                   </div>
                 ) : (
@@ -312,8 +341,8 @@ export default function PesquisaPrecos() {
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-indigo-600">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Homologação Estatística</h3>
-            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema processou os valores com base nos cálculos de correção monetária (se aplicável) e filtrou os discrepantes via IQR.</p>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Homologação Estatística Absoluta</h3>
+            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema processou os valores e adicionou a defesa metodológica do IQR ao relatório. A base de dados também está disponível para exportação CSV.</p>
             <div className="flex gap-3 justify-end mt-6">
               <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md">Cancelar</button>
               <button onClick={exportarRelatorioWord} className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-md hover:bg-indigo-700 shadow-sm">Confirmar Homologação</button>
