@@ -9,7 +9,9 @@ export default function Home() {
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [motivacaoHumana, setMotivacaoHumana] = useState('');
+  // DECLARAÇÃO DE MEMÓRIA (Isso resolve a tela vermelha "is not defined")
+  const [origem, setOrigem] = useState('');
+  const [impacto, setImpacto] = useState('');
   const [pca, setPca] = useState('Sim');
   
   const [modalAberto, setModalAberto] = useState(false);
@@ -29,17 +31,14 @@ export default function Home() {
     setLoading(true);
     setErro(null);
 
-    const justificativaEnriquecida = `
-      ATENÇÃO IA - MOTIVAÇÃO FÁTICA DO GESTOR (NÃO ALTERAR O NÚCLEO DESTE TEXTO): "${motivacaoHumana}".
-      STATUS PCA: A contratação está prevista no PCA? ${pca}.
-      INFORMAÇÕES ADICIONAIS: ${dadosFormulario.get('justificativa')}
-    `;
-
+    // BLINDAGEM ANTI-422: Empacotamento exato para o Python
     const payload = {
-      setor_requisitante: dadosFormulario.get('setor'),
-      objeto_da_compra: dadosFormulario.get('objeto'),
-      justificativa_precaria: justificativaEnriquecida,
-      quantidade_estimada: Number(dadosFormulario.get('quantidade')),
+      setor_requisitante: (dadosFormulario.get('setor') || '').toString(),
+      objeto_da_compra: (dadosFormulario.get('objeto') || '').toString(),
+      quantidade_estimada: Number(dadosFormulario.get('quantidade')) || 1,
+      origem_necessidade: origem || 'Não selecionada',
+      impacto_institucional: impacto || 'Não selecionado',
+      previsao_pca: pca
     };
 
     try {
@@ -56,13 +55,13 @@ export default function Home() {
     if (!resultado) return;
     const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>DFD Oficial</title></head><body>";
     const footer = "</body></html>";
-    const htmlText = resultado.texto_oficial.split('\n').map((line: string) => `<p style="font-family: Arial, sans-serif; font-size: 12pt; text-align: justify; line-height: 1.5;">${line}</p>`).join('');
+    const htmlText = resultado.texto_oficial.split('\n').map((line: string) => `<p style="font-family: Arial, sans-serif; font-size: 11pt; text-align: justify; line-height: 1.5; margin-bottom: 6px;">${line}</p>`).join('');
     const sourceHTML = header + htmlText + footer;
     const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const fileDownload = document.createElement("a");
     fileDownload.href = url;
-    fileDownload.download = 'DFD_Oficial_GovTech.doc';
+    fileDownload.download = 'DFD_Oficial_Auditavel.doc';
     document.body.appendChild(fileDownload);
     fileDownload.click();
     document.body.removeChild(fileDownload);
@@ -74,31 +73,26 @@ export default function Home() {
       <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-8 border border-slate-200">
         
         <div className="mb-6 bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono text-center tracking-wider">
-          SISTEMA DE APOIO À DECISÃO - LEI 14.133/2021
+          MÓDULO DE GOVERNANÇA E COMPLIANCE - LEI 14.133/2021
         </div>
 
-        {/* =========================================================
-            NOVA BARRA DE NAVEGAÇÃO GLOBAL (INTERLIGAÇÃO DAS FASES)
-            ========================================================= */}
         <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
           <span className="text-blue-700 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-md shadow-sm">1. Módulo DFD</span>
           <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">2. Módulo ETP →</Link>
           <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
-          <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all flex items-center gap-2">
-            4. Pesquisa PNCP (IN 65) <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase shadow-sm">Novo</span>
-          </Link>
+          <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. Pesquisa PNCP →</Link>
         </nav>
 
         <header className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900">Fase 1: Formalização de Demanda (DFD)</h1>
-          <p className="text-slate-500 text-sm">Preenchimento Híbrido: Gestor + Inteligência Artificial</p>
+          <p className="text-slate-500 text-sm">Estruturação guiada para blindagem institucional.</p>
         </header>
         
         <form onSubmit={prepararEnvio} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="flex flex-col">
               <label className="text-sm font-semibold mb-1">Setor Requisitante</label>
-              <input name="setor" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Secretaria de TI" />
+              <input name="setor" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Secretaria de Saúde" />
             </div>
             <div className="flex flex-col">
               <label className="text-sm font-semibold mb-1">Quantidade Estimada</label>
@@ -108,11 +102,42 @@ export default function Home() {
 
           <div className="flex flex-col">
             <label className="text-sm font-semibold mb-1">Objeto da Demanda</label>
-            <input name="objeto" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Notebooks de alto desempenho" />
+            <input name="objeto" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de Veículos Utilitários" />
+          </div>
+
+          {/* NOVOS CAMPOS ESTRUTURADOS */}
+          <div className="flex flex-col p-5 bg-blue-50 border border-blue-200 rounded-md">
+            <label className="text-sm font-bold text-slate-800 mb-3">Origem Técnica da Necessidade</label>
+            <select 
+              required 
+              value={origem} 
+              onChange={(e) => setOrigem(e.target.value)}
+              className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="" disabled>Selecione o motivo fático...</option>
+              <option value="Obsolescência tecnológica dos equipamentos atuais">Obsolescência dos equipamentos atuais</option>
+              <option value="Aumento de demanda operacional do setor">Aumento de demanda operacional</option>
+              <option value="Necessidade de adequação a nova exigência legal ou normativa">Adequação a nova exigência legal/normativa</option>
+              <option value="Falhas frequentes e alto custo de manutenção do parque atual">Alto custo de manutenção do parque atual</option>
+            </select>
+
+            <label className="text-sm font-bold text-slate-800 mb-3 mt-4">Risco e Impacto Institucional da Não Contratação</label>
+            <select 
+              required 
+              value={impacto} 
+              onChange={(e) => setImpacto(e.target.value)}
+              className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="" disabled>Selecione o principal risco...</option>
+              <option value="Paralisação ou prejuízo direto ao atendimento ao cidadão">Prejuízo ao atendimento ao cidadão</option>
+              <option value="Risco à segurança da informação e integridade dos dados governamentais">Risco à segurança da informação</option>
+              <option value="Redução severa da eficiência e produtividade dos servidores">Redução de eficiência dos servidores</option>
+              <option value="Descumprimento de metas estabelecidas no planejamento estratégico">Descumprimento de metas estratégicas</option>
+            </select>
           </div>
 
           <div className="flex flex-col p-4 bg-slate-50 border border-slate-200 rounded-md">
-            <label className="text-sm font-bold text-slate-800 mb-2">A Contratação está prevista no PCA (Plano de Contratações Anual)?</label>
+            <label className="text-sm font-bold text-slate-800 mb-2">A Contratação está prevista no PCA?</label>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="pca" value="Sim" checked={pca === 'Sim'} onChange={(e) => setPca(e.target.value)} className="w-4 h-4 text-blue-600" />
@@ -125,26 +150,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-col border-l-4 border-blue-600 pl-4 py-2">
-            <label className="text-sm font-bold text-slate-800 mb-1">Motivação Administrativa (Art. 11)</label>
-            <p className="text-xs text-slate-500 mb-2">Descreva com suas palavras o motivo fático desta compra. A IA usará este texto como núcleo inalterável.</p>
-            <textarea 
-              value={motivacaoHumana} 
-              onChange={(e) => setMotivacaoHumana(e.target.value)}
-              required 
-              rows={3} 
-              className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30" 
-              placeholder="Ex: A sala de operação sofreu danos e os equipamentos atuais queimaram..." 
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <label className="text-sm font-semibold mb-1">Informações Adicionais para a IA</label>
-            <textarea name="justificativa" rows={2} className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Detalhes complementares (opcional)..." />
-          </div>
-
           <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-md hover:bg-slate-800 disabled:bg-slate-400 transition-all shadow-md">
-            {loading ? 'Consolidando Documento...' : 'Gerar DFD Oficial'}
+            {loading ? 'Aplicando Motor de Governança...' : 'Gerar DFD Auditável'}
           </button>
         </form>
 
@@ -153,12 +160,14 @@ export default function Home() {
         {resultado && (
           <div className="mt-10 p-6 bg-slate-50 rounded-md border border-slate-300">
             <div className="flex justify-between items-center mb-4 border-b border-slate-300 pb-4">
-              <h2 className="text-lg font-bold">DFD Consolidado</h2>
+              <h2 className="text-lg font-bold">DFD Estruturado e Blindado</h2>
               <button onClick={exportarParaWord} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded shadow transition-colors flex items-center gap-2">
-                📄 Assinar e Exportar
+                📄 Exportar Documento Legal
               </button>
             </div>
-            <div className="bg-white p-6 rounded shadow-sm whitespace-pre-wrap text-sm leading-relaxed border border-slate-200">{resultado.texto_oficial}</div>
+            <div className="bg-white p-6 rounded shadow-sm whitespace-pre-wrap text-sm leading-relaxed border border-slate-200 font-serif">
+              {resultado.texto_oficial}
+            </div>
           </div>
         )}
       </div>
@@ -166,9 +175,9 @@ export default function Home() {
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Termo de Copilotagem</h3>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Selo de Autoria e Responsabilidade</h3>
             <p className="text-sm text-slate-600 mb-4 text-justify">
-              O sistema atua exclusivamente como assistente de redação e formatação baseada em Inteligência Artificial. A decisão administrativa, a veracidade dos fatos e a pesquisa de mercado são de sua inteira responsabilidade.
+              O sistema traduziu as suas seleções fáticas para a linguagem jurídica formal. Ao confirmar, um Hash imutável será gerado no documento para fins de auditoria do TCE/TCU.
             </p>
             
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
@@ -180,14 +189,14 @@ export default function Home() {
                   className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300"
                 />
                 <span className="text-sm font-semibold text-slate-800 text-justify">
-                  Declaro sob as penas da Lei 14.133/2021 que li, conferi e assumo a autoria técnica das informações que serão geradas neste documento.
+                  Declaro que as informações selecionadas condizem com a realidade administrativa e assumo a responsabilidade técnica perante o Art. 11 da Lei 14.133/2021.
                 </span>
               </label>
             </div>
 
             <div className="flex gap-3 justify-end">
               <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md transition-colors">Cancelar</button>
-              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm">Confirmar e Gerar</button>
+              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm">Confirmar e Assinar Eletronicamente</button>
             </div>
           </div>
         </div>

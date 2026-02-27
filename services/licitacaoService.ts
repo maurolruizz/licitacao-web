@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+// Forçando conexão com o Cérebro Local para testes (Regressão Zero)
+const API_URL = 'http://localhost:8000/api/v1';
 
 export const licitacaoService = {
   gerarDFD: async (dados: any) => {
