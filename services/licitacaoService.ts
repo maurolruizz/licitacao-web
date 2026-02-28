@@ -1,5 +1,3 @@
-// ROTEADOR INTELIGENTE (Regressão Zero)
-// Detecta automaticamente se o usuário está no Localhost ou na Vercel (Nuvem)
 const isProducao = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
 
 const API_URL = isProducao 
@@ -44,6 +42,17 @@ export const licitacaoService = {
       body: JSON.stringify({ palavra_chave: palavraChave }),
     });
     if (!response.ok) throw new Error('Erro ao buscar preços na IN 65');
+    return response.json();
+  },
+
+  // NOVA ROTA DE AUDITORIA (Sprint 5)
+  validarHashAuditoria: async (hash: string) => {
+    const response = await fetch(`${API_URL}/auditoria/validar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash_code: hash }),
+    });
+    if (!response.ok) throw new Error('Erro na conexão com o sistema de verificação.');
     return response.json();
   }
 };
