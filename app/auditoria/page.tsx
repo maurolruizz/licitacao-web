@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { licitacaoService } from '../../services/licitacaoService';
 
 export default function ModoAuditoria() {
-  // === ESTADOS DA LINHA DO TEMPO (Intactos) ===
   const [dadosProcesso, setDadosProcesso] = useState<any>({
     objeto: 'Não identificado',
     etapas: { dfd: false, etp: false, tr: false, in65: false },
@@ -14,38 +13,54 @@ export default function ModoAuditoria() {
   });
   const [loading, setLoading] = useState(true);
   
-  // === ESTADOS DO VALIDADOR DE HASH (Intactos) ===
+  // === ESTADOS DO VALIDADOR DE HASH ===
   const [hashInput, setHashInput] = useState('');
   const [validando, setValidando] = useState(false);
   const [resultadoValidacao, setResultadoValidacao] = useState<any>(null);
   const [erroValidacao, setErroValidacao] = useState<string | null>(null);
 
-  // === NOVOS ESTADOS: TERMÔMETRO IGEP (Projeto Apex) ===
+  // === ESTADOS TERMÔMETRO IGEP ===
   const [volumeFinanceiro, setVolumeFinanceiro] = useState('Baixo');
   const [complexidade, setComplexidade] = useState('Comum');
   const [scoreIgep, setScoreIgep] = useState<number | null>(null);
   const [classificacaoIgep, setClassificacaoIgep] = useState('');
 
-  useEffect(() => {
-    const objeto = localStorage.getItem('licitacao_objeto') || 'PROCESSO NÃO INICIADO';
-    const in65Hash = localStorage.getItem('licitacao_in65_hash');
-    const trStatus = localStorage.getItem('licitacao_tr_status');
-    const orgaoData = localStorage.getItem('licitacao_orgao_data');
-    
-    const orgaoParsed = orgaoData ? JSON.parse(orgaoData) : null;
+  // === NOVO: ESTADOS DO DATA MOAT (Inteligência Coletiva) ===
+  const [dataLakeStats, setDataLakeStats] = useState<any>(null);
 
-    setDadosProcesso({
-      objeto: objeto.toUpperCase(),
-      etapas: {
-        dfd: true, 
-        etp: !!objeto && objeto !== 'PROCESSO NÃO INICIADO', 
-        tr: !!trStatus || (!!objeto && objeto !== 'PROCESSO NÃO INICIADO'), 
-        in65: !!in65Hash
-      },
-      in65Hash: in65Hash || 'Pendente de homologação estatística',
-      orgao: orgaoParsed
-    });
-    setLoading(false);
+  useEffect(() => {
+    const carregarDados = async () => {
+      const objeto = localStorage.getItem('licitacao_objeto') || 'PROCESSO NÃO INICIADO';
+      const in65Hash = localStorage.getItem('licitacao_in65_hash');
+      const trStatus = localStorage.getItem('licitacao_tr_status');
+      const orgaoData = localStorage.getItem('licitacao_orgao_data');
+      
+      const orgaoParsed = orgaoData ? JSON.parse(orgaoData) : null;
+
+      setDadosProcesso({
+        objeto: objeto.toUpperCase(),
+        etapas: {
+          dfd: true, 
+          etp: !!objeto && objeto !== 'PROCESSO NÃO INICIADO', 
+          tr: !!trStatus || (!!objeto && objeto !== 'PROCESSO NÃO INICIADO'), 
+          in65: !!in65Hash
+        },
+        in65Hash: in65Hash || 'Pendente de homologação estatística',
+        orgao: orgaoParsed
+      });
+
+      // Busca os dados do Data Lake no Backend
+      try {
+        const stats = await licitacaoService.obterDataMoatStats();
+        setDataLakeStats(stats);
+      } catch (e) {
+        console.error("Data Lake indisponível");
+      }
+
+      setLoading(false);
+    };
+    
+    carregarDados();
   }, []);
 
   const validarSeloCriptografico = async (e: React.FormEvent) => {
@@ -62,28 +77,17 @@ export default function ModoAuditoria() {
     }
   };
 
-  // === NOVO MOTOR: CÁLCULO DO IGEP ===
   const calcularIGEP = () => {
-    let riscoBase = 100; // Risco máximo inicial se não houver nada
-
-    // 1. Abatimento por Conformidade Estrutural (A força da nossa plataforma)
+    let riscoBase = 100;
     if (dadosProcesso.etapas.dfd) riscoBase -= 15;
-    if (dadosProcesso.etapas.etp) riscoBase -= 25; // ETP é a peça de maior mitigação de risco
+    if (dadosProcesso.etapas.etp) riscoBase -= 25; 
     if (dadosProcesso.etapas.tr) riscoBase -= 15;
-    if (dadosProcesso.etapas.in65) riscoBase -= 25; // Preços validados IQR mitigam sobrepreço
-
-    // 2. Abatimento por Porte (Art. 176 - IBGE)
-    if (dadosProcesso.orgao && dadosProcesso.orgao.is_pequeno_porte) {
-      riscoBase -= 5; // Regras simplificadas reduzem exposição técnica
-    }
-
-    // 3. Acréscimo por Complexidade e Valor (Input do Controlador)
+    if (dadosProcesso.etapas.in65) riscoBase -= 25; 
+    if (dadosProcesso.orgao && dadosProcesso.orgao.is_pequeno_porte) riscoBase -= 5; 
     if (volumeFinanceiro === 'Alto') riscoBase += 20;
     if (volumeFinanceiro === 'Medio') riscoBase += 10;
-    
     if (complexidade === 'Alta') riscoBase += 15;
 
-    // Trava de segurança estatística (Min 0, Max 100)
     const scoreFinal = Math.min(100, Math.max(0, riscoBase));
     setScoreIgep(scoreFinal);
 
@@ -186,6 +190,32 @@ export default function ModoAuditoria() {
           )}
         </header>
 
+        {/* === NOVO BLOCO: DATA MOAT (INTELIGÊNCIA INSTITUCIONAL) === */}
+        {dataLakeStats && (
+          <div className="bg-gradient-to-r from-slate-800 to-indigo-900/40 p-6 rounded-xl border border-indigo-500/30 shadow-xl mb-8 animate-fadeIn">
+            <h2 className="text-lg font-bold text-indigo-300 mb-4 flex items-center gap-2">🧠 GovTech Data Lake (Inteligência Coletiva da Plataforma)</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                <span className="block text-xs text-slate-400 mb-1">Processos Estruturados</span>
+                <strong className="text-2xl text-white">{dataLakeStats.total_processos_analisados.toLocaleString('pt-BR')}</strong>
+              </div>
+              <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                <span className="block text-xs text-slate-400 mb-1">Economia Gerada (Filtro IQR)</span>
+                <strong className="text-xl text-green-400">{dataLakeStats.economia_gerada_iqr}</strong>
+              </div>
+              <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                <span className="block text-xs text-slate-400 mb-1">Riscos Mitigados (ETP 3x3)</span>
+                <strong className="text-2xl text-yellow-400">{dataLakeStats.riscos_mitigados_etp.toLocaleString('pt-BR')}</strong>
+              </div>
+              <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                <span className="block text-xs text-slate-400 mb-1">Frequência Decisória (TCO)</span>
+                <strong className="text-2xl text-blue-400">{dataLakeStats.criterio_tco_predominante}</strong>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 mt-4 text-right">Dados anonimizados de mercado. O Fosso Estratégico.</p>
+          </div>
+        )}
+
         {/* TIMELINE INTACTA */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className={`p-5 rounded-xl border ${dadosProcesso.etapas.dfd ? 'bg-green-900/20 border-green-500/50' : 'bg-slate-800 border-slate-700'}`}>
@@ -208,7 +238,7 @@ export default function ModoAuditoria() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           
-          {/* === NOVO BLOCO: TERMÔMETRO IGEP === */}
+          {/* BLOCO IGEP INTACTO */}
           <div className="bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-xl flex flex-col justify-between">
             <div>
               <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">📊 Termômetro de Risco (IGEP)</h2>
@@ -254,7 +284,7 @@ export default function ModoAuditoria() {
             </button>
           </div>
 
-          {/* SCANNER DE INTEGRIDADE INTACTO */}
+          {/* SCANNER WORM INTACTO */}
           <div className="bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-xl">
             <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">🔍 Validador Criptográfico WORM</h2>
             <p className="text-sm text-slate-400 mb-6 pb-4 border-b border-slate-700">Conectado via Webhook à rede de registro imutável (Simulação).</p>

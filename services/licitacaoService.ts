@@ -55,7 +55,6 @@ export const licitacaoService = {
     return response.json();
   },
 
-  // NOVA ROTA (Projeto Apex - Integração IBGE)
   buscarInfoOrgao: async (cidadeOuCnpj: string) => {
     const response = await fetch(`${API_URL}/orgao/info`, {
       method: 'POST',
@@ -63,6 +62,13 @@ export const licitacaoService = {
       body: JSON.stringify({ cidade_ou_cnpj: cidadeOuCnpj }),
     });
     if (!response.ok) throw new Error('Erro ao buscar dados do IBGE.');
+    return response.json();
+  },
+
+  // NOVA ROTA (Projeto Apex - Data Moat)
+  obterDataMoatStats: async () => {
+    const response = await fetch(`${API_URL}/data-lake/stats`);
+    if (!response.ok) throw new Error('Erro ao conectar com o Data Lake.');
     return response.json();
   }
 };
