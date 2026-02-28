@@ -45,7 +45,6 @@ export const licitacaoService = {
     return response.json();
   },
 
-  // NOVA ROTA DE AUDITORIA (Sprint 5)
   validarHashAuditoria: async (hash: string) => {
     const response = await fetch(`${API_URL}/auditoria/validar`, {
       method: 'POST',
@@ -53,6 +52,17 @@ export const licitacaoService = {
       body: JSON.stringify({ hash_code: hash }),
     });
     if (!response.ok) throw new Error('Erro na conexão com o sistema de verificação.');
+    return response.json();
+  },
+
+  // NOVA ROTA (Projeto Apex - Integração IBGE)
+  buscarInfoOrgao: async (cidadeOuCnpj: string) => {
+    const response = await fetch(`${API_URL}/orgao/info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cidade_ou_cnpj: cidadeOuCnpj }),
+    });
+    if (!response.ok) throw new Error('Erro ao buscar dados do IBGE.');
     return response.json();
   }
 };

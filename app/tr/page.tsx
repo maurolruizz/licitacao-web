@@ -8,7 +8,10 @@ export default function PaginaTR() {
   const [objeto, setObjeto] = useState('');
   const [especificacao, setEspecificacao] = useState('');
   const [bloqueado, setBloqueado] = useState(false);
+  
+  // === INTELIGÊNCIA DO IBGE ===
   const [modoPequeno, setModoPequeno] = useState(false);
+  const [isTravadoPeloIbge, setIsTravadoPeloIbge] = useState(false);
 
   useEffect(() => {
     const objetoSalvo = localStorage.getItem('licitacao_objeto');
@@ -19,6 +22,19 @@ export default function PaginaTR() {
       setEspecificacao(especificacaoSalva);
     } else {
       setBloqueado(true);
+    }
+
+    // Leitura do Censo IBGE salvo no DFD
+    const orgaoData = localStorage.getItem('licitacao_orgao_data');
+    if (orgaoData) {
+      const orgao = JSON.parse(orgaoData);
+      if (orgao.is_pequeno_porte) {
+        setIsTravadoPeloIbge(true);
+        setModoPequeno(true);
+        setModeloGestao("Fiscalização direta pelo servidor designado através de portaria, com ateste em nota fiscal após conferência quantitativa e qualitativa. [NOTA DE GOVERNANÇA: Modelo simplificado aplicado automaticamente via API do Censo, atestando porte populacional aderente ao Art. 176 da Lei 14.133/21].");
+        setSancoes("Apenas advertência e multa moratória leve, aplicável a objetos de pronta entrega e baixo risco.");
+        setPagamento("Em até 30 dias após o ateste da nota fiscal");
+      }
     }
   }, []);
 
@@ -32,14 +48,17 @@ export default function PaginaTR() {
   const [pagamento, setPagamento] = useState('');
   const [modeloGestao, setModeloGestao] = useState('');
   const [sancoes, setSancoes] = useState('');
-
+  
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
 
-  // MODO MUNICÍPIO PEQUENO COM RESSALVA JURÍDICA (SPRINT 4)
+  // MODO MUNICÍPIO PEQUENO MANUAL
   const ativarModoPequeno = () => {
+    if (isTravadoPeloIbge) return; 
+    
     const ativo = !modoPequeno;
     setModoPequeno(ativo);
+    
     if (ativo) {
       setModeloGestao("Fiscalização direta pelo servidor designado através de portaria, com ateste em nota fiscal após conferência quantitativa e qualitativa. [NOTA DE GOVERNANÇA: Modelo simplificado aplicado conforme porte do ente e natureza da contratação, sem afastamento de exigências legais da Lei 14.133/21].");
       setSancoes("Apenas advertência e multa moratória leve, aplicável a objetos de pronta entrega e baixo risco.");
@@ -106,6 +125,7 @@ export default function PaginaTR() {
     URL.revokeObjectURL(url);
   };
 
+  // TELA DE BLOQUEIO RESTAURADA
   if (bloqueado) {
     return (
       <main className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
@@ -127,8 +147,12 @@ export default function PaginaTR() {
         
         <div className="mb-6 bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono text-center tracking-wider shadow-sm flex justify-between items-center px-6">
           <span>MÓDULO DE GOVERNANÇA E COMPLIANCE - LEI 14.133/2021</span>
-          <button onClick={ativarModoPequeno} className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${modoPequeno ? 'bg-yellow-500 text-yellow-900' : 'bg-slate-700 text-slate-300'}`}>
-            {modoPequeno ? '🚀 Modo Município Pequeno: Ativo' : 'Ativar Modo Município Pequeno'}
+          <button 
+            onClick={ativarModoPequeno} 
+            disabled={isTravadoPeloIbge} 
+            className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-colors ${modoPequeno ? 'bg-yellow-500 text-yellow-900' : 'bg-slate-700 text-slate-300'} ${isTravadoPeloIbge ? 'cursor-not-allowed border-2 border-white' : ''}`}
+          >
+            {isTravadoPeloIbge ? '✓ AUTENTICADO: Art. 176 (Pequeno Porte)' : modoPequeno ? '🚀 Modo Município Pequeno: Ativo' : 'Ativar Modo Município Pequeno'}
           </button>
         </div>
 
@@ -150,6 +174,7 @@ export default function PaginaTR() {
           </button>
         </header>
         
+        {/* FORMULÁRIO EXPANDIDO RESTAURADO */}
         <form onSubmit={prepararEnvio} className="grid grid-cols-1 lg:grid-cols-2 gap-8 bg-white p-8 rounded-xl shadow-sm border border-slate-200">
           
           <div className="space-y-6">
@@ -205,21 +230,41 @@ export default function PaginaTR() {
           <div className="mt-10 p-8 bg-green-50 rounded-xl border border-green-200 shadow-sm">
             <div className="flex justify-between items-center mb-6 border-b border-green-200 pb-4">
               <h2 className="text-xl font-bold text-green-900">Termo de Referência Consolidado</h2>
-              <button type="button" onClick={exportarParaWord} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors flex items-center gap-2">📄 Exportar Word</button>
+              <button type="button" onClick={exportarParaWord} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors flex items-center gap-2">
+                📄 Exportar Word
+              </button>
             </div>
-            <div className="bg-white p-8 rounded-lg shadow-sm whitespace-pre-wrap text-sm leading-relaxed border border-green-100 text-justify font-serif">{resultado.texto_oficial}</div>
+            <div className="bg-white p-8 rounded-lg shadow-sm whitespace-pre-wrap text-sm leading-relaxed border border-green-100 text-justify font-serif">
+              {resultado.texto_oficial}
+            </div>
           </div>
         )}
       </div>
 
+      {/* MODAL COM CHECKBOX RESTAURADO */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-green-600">
             <h3 className="text-xl font-bold text-slate-900 mb-2">Assinatura de Hash Absoluto - TR</h3>
-            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema organizou os blocos obrigatórios. Ao prosseguir, o Hash Absolute (v2.2.0) registrará imutavelmente suas escolhas legais.</p>
+            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema organizou os blocos obrigatórios. Ao prosseguir, o Hash Absolute (v2.3.0) registrará imutavelmente suas escolhas legais.</p>
+            
+            <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={termoAceito}
+                  onChange={(e) => setTermoAceito(e.target.checked)}
+                  className="mt-1 w-5 h-5 text-green-600 rounded border-slate-300"
+                />
+                <span className="text-sm font-semibold text-slate-800 text-justify">
+                  Declaro que as informações acima refletem a necessidade real do órgão e aprovo a gravação do Hash Probatório.
+                </span>
+              </label>
+            </div>
+
             <div className="flex gap-3 justify-end mt-6">
-              <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md">Cancelar</button>
-              <button onClick={executarEnvioBlindado} className="px-6 py-2 bg-green-700 text-white font-bold rounded-md hover:bg-green-800 shadow-sm">Aprovar e Gravar Hash</button>
+              <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md transition-colors">Cancelar</button>
+              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-green-700 text-white font-bold rounded-md hover:bg-green-800 disabled:bg-slate-300 transition-colors shadow-sm">Aprovar e Gravar Hash</button>
             </div>
           </div>
         </div>
