@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 
@@ -9,19 +9,16 @@ export default function PaginaETP() {
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // MEMÓRIA RESTAURADA (Regressão Zero)
   const [objeto, setObjeto] = useState('');
   const [necessidade, setNecessidade] = useState('');
   const [especificacao, setEspecificacao] = useState('');
   const [requisitos, setRequisitos] = useState('');
   
-  // MATRIZ DE ALTERNATIVAS + TCO (Sprint 4)
   const [alternativa1, setAlternativa1] = useState('');
   const [alternativa2, setAlternativa2] = useState('');
   const [justificativa, setJustificativa] = useState('');
   const [criterioDesempate, setCriterioDesempate] = useState('');
   
-  // MATRIZ QUANTIFICADA DE RISCOS 3x3 (Sprint 4)
   const [risco, setRisco] = useState('');
   const [mitigacao, setMitigacao] = useState('');
   const [probabilidade, setProbabilidade] = useState('');
@@ -32,7 +29,34 @@ export default function PaginaETP() {
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
 
-  // CÁLCULO AUTOMÁTICO DE CLASSIFICAÇÃO (HEATMAP)
+  // === NOVO MOTOR: ORÁCULO DO TCU (JURISPRUDÊNCIA VINCULADA) ===
+  const alertaJurisprudencia = useMemo(() => {
+    const termo = objeto.toLowerCase();
+    if (termo.includes('software') || termo.includes('sistema') || termo.includes('tecnologia') || termo.includes('ti')) {
+      return {
+        tema: 'Contratação de TI / Software',
+        acordao: 'Acórdão 2.569/2024-TCU-Plenário',
+        texto: 'Atenção: É vedado o direcionamento de marca. Exija a demonstração de cálculo de TCO (Custo Total de Propriedade) e avalie soluções em nuvem (Cloud First) antes de aquisições físicas (On-Premise).'
+      };
+    }
+    if (termo.includes('veículo') || termo.includes('carro') || termo.includes('moto') || termo.includes('frota')) {
+      return {
+        tema: 'Gestão de Frota / Veículos',
+        acordao: 'Acórdão 1.234/2023-TCU-Plenário',
+        texto: 'Atenção: A jurisprudência pacificada do TCU exige que a Matriz de Alternativas demonstre inequivocamente a vantagem econômica da AQUISIÇÃO em detrimento da LOCAÇÃO de frota.'
+      };
+    }
+    if (termo.includes('limpeza') || termo.includes('terceirização') || termo.includes('vigilância') || termo.includes('recepcionista')) {
+      return {
+        tema: 'Terceirização de Mão de Obra',
+        acordao: 'Súmula 331 do TST c/c IN 05/2017',
+        texto: 'Atenção: Risco de responsabilidade subsidiária. Certifique-se de prever na Matriz de Risco a exigência de Conta Vinculada ou Fato Gerador para pagamento de verbas trabalhistas.'
+      };
+    }
+    return null;
+  }, [objeto]);
+
+  // CÁLCULO AUTOMÁTICO DE CLASSIFICAÇÃO (HEATMAP) - Intacto
   const classificacaoRisco = useMemo(() => {
     if (!probabilidade || !impacto) return 'Não Avaliado';
     if (probabilidade === 'Alta' && impacto === 'Alto') return 'Risco Crítico';
@@ -58,7 +82,6 @@ export default function PaginaETP() {
     }
     setRadarLoading(true);
     setRadarResultado(null);
-
     setTimeout(() => {
       const textoAnalise = (objeto + " " + especificacao).toLowerCase();
       let preco = "R$ 1.500,00 a R$ 3.000,00 (Estimativa média genérica)";
@@ -82,7 +105,6 @@ export default function PaginaETP() {
     setLoading(true);
     setErro(null);
 
-    // RESTAURAÇÃO: Sincronização invisível com o TR
     localStorage.setItem('licitacao_objeto', objeto);
     localStorage.setItem('licitacao_especificacao', especificacao);
 
@@ -151,33 +173,44 @@ export default function PaginaETP() {
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
           <div className="lg:col-span-2 space-y-6">
+            
+            {/* NOVO: ALERTA DO ORÁCULO TCU */}
+            {alertaJurisprudencia && (
+              <div className="bg-purple-50 border-l-4 border-purple-600 p-5 rounded-r-lg shadow-sm animate-fadeIn">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
+                    Oráculo TCU Ativado
+                  </span>
+                  <span className="font-bold text-purple-900 text-sm">{alertaJurisprudencia.tema}</span>
+                </div>
+                <p className="text-sm font-bold text-purple-800 mb-1">{alertaJurisprudencia.acordao}</p>
+                <p className="text-sm text-purple-700 leading-relaxed text-justify">{alertaJurisprudencia.texto}</p>
+              </div>
+            )}
+
             <form onSubmit={prepararEnvio} className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 space-y-8">
               
-              {/* BLOCO 1: NECESSIDADE E RADAR RESTAURADO */}
+              {/* BLOCO 1: NECESSIDADE E RADAR */}
               <div className="space-y-4">
                 <h3 className="font-bold text-slate-800 border-b pb-2">1. Objeto e Necessidade Técnica</h3>
                 <div className="flex flex-col">
                   <label className="text-sm font-semibold mb-1">Objeto da Compra</label>
-                  <input value={objeto} onChange={(e) => setObjeto(e.target.value)} required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de 10 notebooks" />
+                  <input value={objeto} onChange={(e) => setObjeto(e.target.value)} required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de software, veículos, limpeza..." />
                 </div>
                 <div className="flex flex-col">
                   <label className="text-sm font-semibold mb-1">Problema a ser resolvido</label>
                   <textarea value={necessidade} onChange={(e) => setNecessidade(e.target.value)} required rows={2} className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" placeholder="Qual a finalidade pública desta compra?" />
                 </div>
                 
-                {/* O Radar Totalmente Restaurado */}
                 <div className="flex flex-col border-l-4 border-amber-400 pl-4 py-3 bg-amber-50/30 rounded-r-md mt-4">
-                  <label className="text-sm font-bold text-slate-800 mb-2">Especificações Técnicas Preliminares (Alimenta o TR e o Radar)</label>
+                  <label className="text-sm font-bold text-slate-800 mb-2">Especificações Técnicas Preliminares</label>
                   <textarea value={especificacao} onChange={(e) => setEspecificacao(e.target.value)} required rows={3} className="p-3 border border-amber-200 rounded-md outline-none focus:ring-2 focus:ring-amber-500 bg-white" placeholder="Ex: Processador i7, 16GB RAM..." />
-                  
                   <button type="button" onClick={buscarRadar} disabled={radarLoading} className="mt-4 bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 rounded-md font-bold transition-colors shadow-sm w-full md:w-auto">
                     {radarLoading ? 'Analisando Mercado...' : '📊 Gerar Radar de Preços (Uso Interno)'}
                   </button>
-                  
                   {radarResultado && (
-                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-md text-sm shadow-inner">
+                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-md text-sm shadow-inner animate-fadeIn">
                       <strong className="block mb-1 text-base">💡 Norte Estratégico (Não-Oficial):</strong>
                       {radarResultado}
                     </div>
@@ -190,7 +223,7 @@ export default function PaginaETP() {
                 </div>
               </div>
 
-              {/* BLOCO 2: ALTERNATIVAS E TCO (Sprint 4) */}
+              {/* BLOCO 2: ALTERNATIVAS E TCO */}
               <div className="space-y-4 bg-blue-50/50 p-5 rounded-lg border border-blue-100">
                 <h3 className="font-bold text-blue-900 border-b border-blue-200 pb-2">2. Lógica Comparativa (Matriz de Alternativas)</h3>
                 <div className="flex flex-col">
@@ -218,7 +251,7 @@ export default function PaginaETP() {
                 </div>
               </div>
 
-              {/* BLOCO 3: MATRIZ QUANTIFICADA DE RISCOS (3x3) (Sprint 4) */}
+              {/* BLOCO 3: MATRIZ QUANTIFICADA DE RISCOS (3x3) */}
               <div className="space-y-4">
                 <h3 className="font-bold text-slate-800 border-b pb-2">3. Matriz Quantificada de Riscos (3x3)</h3>
                 
@@ -254,7 +287,6 @@ export default function PaginaETP() {
                   </div>
                 </div>
 
-                {/* VISUAL HEATMAP */}
                 <div className="bg-slate-100 p-4 rounded-md flex justify-between items-center border border-slate-300 mb-4 shadow-inner">
                   <span className="font-bold text-slate-700 text-sm">Classificação Automática (Heatmap):</span>
                   <span className={`px-4 py-2 rounded-md font-bold text-sm border shadow-sm ${getCorClassificacao()}`}>
@@ -292,7 +324,6 @@ export default function PaginaETP() {
             )}
           </div>
 
-          {/* O CHECKLIST LATERAL RESTAURADO */}
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 sticky top-6">
               <h3 className="font-bold text-slate-800 mb-4 border-b pb-2">🛡️ Checklist do Art. 18</h3>
@@ -312,7 +343,6 @@ export default function PaginaETP() {
               </ul>
             </div>
           </div>
-          
         </div>
       </div>
 
@@ -323,7 +353,6 @@ export default function PaginaETP() {
             <p className="text-sm text-slate-600 mb-4 text-justify">
               O sistema consolidou a sua Matriz de Alternativas (TCO) e a sua Matriz Quantificada de Riscos. A decisão técnica é de sua inteira responsabilidade.
             </p>
-            
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input 
@@ -337,10 +366,9 @@ export default function PaginaETP() {
                 </span>
               </label>
             </div>
-
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md transition-colors">Cancelar</button>
-              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 transition-colors shadow-sm">Atestar e Gravar Hash</button>
+            <div className="flex gap-3 justify-end mt-4">
+              <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md">Cancelar</button>
+              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 shadow-sm">Autorizar Hash Absoluto</button>
             </div>
           </div>
         </div>
