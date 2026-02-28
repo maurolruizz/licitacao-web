@@ -5,34 +5,45 @@ import Link from 'next/link';
 import { licitacaoService } from '../../services/licitacaoService';
 
 export default function ModoAuditoria() {
+  // === ESTADOS DA LINHA DO TEMPO (Intactos) ===
   const [dadosProcesso, setDadosProcesso] = useState<any>({
     objeto: 'Não identificado',
     etapas: { dfd: false, etp: false, tr: false, in65: false },
-    in65Hash: null
+    in65Hash: null,
+    orgao: null
   });
-
   const [loading, setLoading] = useState(true);
   
-  // ESTADOS DO VALIDADOR DE HASH (Sprint 5)
+  // === ESTADOS DO VALIDADOR DE HASH (Intactos) ===
   const [hashInput, setHashInput] = useState('');
   const [validando, setValidando] = useState(false);
   const [resultadoValidacao, setResultadoValidacao] = useState<any>(null);
   const [erroValidacao, setErroValidacao] = useState<string | null>(null);
 
+  // === NOVOS ESTADOS: TERMÔMETRO IGEP (Projeto Apex) ===
+  const [volumeFinanceiro, setVolumeFinanceiro] = useState('Baixo');
+  const [complexidade, setComplexidade] = useState('Comum');
+  const [scoreIgep, setScoreIgep] = useState<number | null>(null);
+  const [classificacaoIgep, setClassificacaoIgep] = useState('');
+
   useEffect(() => {
-    const objeto = localStorage.getItem('licitacao_objeto') || 'AQUISIÇÃO DE CADEIRAS DE PLÁSTICO';
+    const objeto = localStorage.getItem('licitacao_objeto') || 'PROCESSO NÃO INICIADO';
     const in65Hash = localStorage.getItem('licitacao_in65_hash');
     const trStatus = localStorage.getItem('licitacao_tr_status');
+    const orgaoData = localStorage.getItem('licitacao_orgao_data');
     
+    const orgaoParsed = orgaoData ? JSON.parse(orgaoData) : null;
+
     setDadosProcesso({
       objeto: objeto.toUpperCase(),
       etapas: {
         dfd: true, 
-        etp: !!objeto, 
-        tr: !!trStatus || !!objeto, 
+        etp: !!objeto && objeto !== 'PROCESSO NÃO INICIADO', 
+        tr: !!trStatus || (!!objeto && objeto !== 'PROCESSO NÃO INICIADO'), 
         in65: !!in65Hash
       },
-      in65Hash: in65Hash || 'Pendente de homologação estatística'
+      in65Hash: in65Hash || 'Pendente de homologação estatística',
+      orgao: orgaoParsed
     });
     setLoading(false);
   }, []);
@@ -40,11 +51,7 @@ export default function ModoAuditoria() {
   const validarSeloCriptografico = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hashInput.trim()) return;
-    
-    setValidando(true);
-    setResultadoValidacao(null);
-    setErroValidacao(null);
-
+    setValidando(true); setResultadoValidacao(null); setErroValidacao(null);
     try {
       const resposta = await licitacaoService.validarHashAuditoria(hashInput);
       setResultadoValidacao(resposta);
@@ -55,17 +62,59 @@ export default function ModoAuditoria() {
     }
   };
 
+  // === NOVO MOTOR: CÁLCULO DO IGEP ===
+  const calcularIGEP = () => {
+    let riscoBase = 100; // Risco máximo inicial se não houver nada
+
+    // 1. Abatimento por Conformidade Estrutural (A força da nossa plataforma)
+    if (dadosProcesso.etapas.dfd) riscoBase -= 15;
+    if (dadosProcesso.etapas.etp) riscoBase -= 25; // ETP é a peça de maior mitigação de risco
+    if (dadosProcesso.etapas.tr) riscoBase -= 15;
+    if (dadosProcesso.etapas.in65) riscoBase -= 25; // Preços validados IQR mitigam sobrepreço
+
+    // 2. Abatimento por Porte (Art. 176 - IBGE)
+    if (dadosProcesso.orgao && dadosProcesso.orgao.is_pequeno_porte) {
+      riscoBase -= 5; // Regras simplificadas reduzem exposição técnica
+    }
+
+    // 3. Acréscimo por Complexidade e Valor (Input do Controlador)
+    if (volumeFinanceiro === 'Alto') riscoBase += 20;
+    if (volumeFinanceiro === 'Medio') riscoBase += 10;
+    
+    if (complexidade === 'Alta') riscoBase += 15;
+
+    // Trava de segurança estatística (Min 0, Max 100)
+    const scoreFinal = Math.min(100, Math.max(0, riscoBase));
+    setScoreIgep(scoreFinal);
+
+    if (scoreFinal <= 25) setClassificacaoIgep('Blindagem Alta (Risco Baixo)');
+    else if (scoreFinal <= 50) setClassificacaoIgep('Risco Controlado (Médio)');
+    else if (scoreFinal <= 75) setClassificacaoIgep('Atenção: Risco Elevado');
+    else setClassificacaoIgep('Alerta Crítico de Governança');
+  };
+
   const exportarRelatorioConsolidado = () => {
+    const corIgep = scoreIgep === null ? '#666' : scoreIgep <= 25 ? '#16a34a' : scoreIgep <= 50 ? '#ca8a04' : '#dc2626';
+    const blocoIgep = scoreIgep !== null ? `
+      <h3 style="font-family: Arial; font-size: 12pt; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 20px;">3. Índice Geral de Exposição Processual (IGEP)</h3>
+      <div style="background-color: #f8fafc; padding: 15px; border-left: 5px solid ${corIgep}; font-family: Arial;">
+        <p style="margin: 0; font-size: 11pt;"><strong>Score de Risco Calculado:</strong> <span style="font-size: 14pt; color: ${corIgep};">${scoreIgep} / 100</span></p>
+        <p style="margin: 5px 0 0 0; font-size: 10pt; color: #475569;"><strong>Classificação:</strong> ${classificacaoIgep}</p>
+        <p style="margin: 5px 0 0 0; font-size: 9pt; color: #64748b;">Parâmetros Avaliados: Complexidade (${complexidade}), Volume Financeiro (${volumeFinanceiro}) e Nível de Conformidade Digital GovTech.</p>
+      </div>
+    ` : '';
+
     const conteudo = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head><meta charset='utf-8'><title>Relatório Consolidado de Governança</title></head><body>
-      <h2 style="text-align: center; font-family: Arial; color: #1e3a8a;">RELATÓRIO CONSOLIDADO DA FASE PREPARATÓRIA</h2>
-      <p style="text-align: center; font-family: Arial; font-size: 10pt; color: #666;">Lei 14.133/2021 - Mapa de Responsabilidade e Compliance</p>
+      <head><meta charset='utf-8'><title>Relatório Executivo de Controladoria</title></head><body>
+      <h2 style="text-align: center; font-family: Arial; color: #1e3a8a;">RELATÓRIO EXECUTIVO PARA CONTROLADORIA INTERNA</h2>
+      <p style="text-align: center; font-family: Arial; font-size: 10pt; color: #666;">Lei 14.133/2021 - Mapa de Responsabilidade, Riscos e Compliance</p>
       
-      <h3 style="font-family: Arial; font-size: 12pt; border-bottom: 1px solid #ccc; padding-bottom: 4px;">1. Dados do Processo</h3>
-      <ul style="font-family: Arial; font-size: 11pt;">
+      <h3 style="font-family: Arial; font-size: 12pt; border-bottom: 1px solid #ccc; padding-bottom: 4px;">1. Dados do Processo e Órgão</h3>
+      <ul style="font-family: Arial; font-size: 10pt;">
+        <li><strong>Órgão:</strong> ${dadosProcesso.orgao ? dadosProcesso.orgao.cidade : 'Não conectado via API IBGE'}</li>
         <li><strong>Objeto Central:</strong> ${dadosProcesso.objeto}</li>
-        <li><strong>Data da Auditoria:</strong> ${new Date().toLocaleDateString('pt-BR')}</li>
+        <li><strong>Data da Emissão:</strong> ${new Date().toLocaleDateString('pt-BR')}</li>
       </ul>
 
       <h3 style="font-family: Arial; font-size: 12pt; border-bottom: 1px solid #ccc; padding-bottom: 4px;">2. Linha do Tempo Decisória (Trilha Imutável)</h3>
@@ -87,18 +136,20 @@ export default function ModoAuditoria() {
           <tr>
             <td style="padding: 8px;"><strong>3. TR (Art. 6º)</strong></td>
             <td style="padding: 8px; text-align: center; color: green; font-weight: bold;">CONCLUÍDO</td>
-            <td style="padding: 8px; font-family: monospace; font-size: 9pt;">Workflow verificado. Modelo de Sanções ativo.</td>
+            <td style="padding: 8px; font-family: monospace; font-size: 9pt;">Workflow verificado. Automação IBGE validada.</td>
           </tr>
           <tr>
             <td style="padding: 8px;"><strong>4. Pesquisa IN 65</strong></td>
             <td style="padding: 8px; text-align: center; color: ${dadosProcesso.etapas.in65 ? 'green' : 'red'}; font-weight: bold;">${dadosProcesso.etapas.in65 ? 'CONCLUÍDO' : 'PENDENTE'}</td>
-            <td style="padding: 8px; font-family: monospace; font-size: 9pt;">Filtro IQR aplicado com IPCA. Hash: ${dadosProcesso.in65Hash}</td>
+            <td style="padding: 8px; font-family: monospace; font-size: 9pt;">Filtro IQR aplicado. Hash: ${dadosProcesso.in65Hash}</td>
           </tr>
         </tbody>
       </table>
       
+      ${blocoIgep}
+
       <br><br><br>
-      <p style="text-align: center; font-family: Arial; font-size: 11pt;">
+      <p style="text-align: center; font-family: Arial; font-size: 10pt; color: #333;">
         ___________________________________________________<br>
         <strong>CERTIFICAÇÃO DE COMPLIANCE GOVTECH</strong><br>
         Atestamos que as peças processuais seguiram o rito rígido da Lei 14.133/2021.
@@ -108,36 +159,35 @@ export default function ModoAuditoria() {
     const blob = new Blob(['\ufeff', conteudo], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = 'Relatorio_Consolidado_Auditoria.doc';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = 'Relatorio_Executivo_Controladoria.doc';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">Carregando Trilha Criptográfica...</div>;
 
   return (
     <main className="min-h-screen bg-slate-900 p-6 font-sans text-slate-100">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto space-y-8">
         
-        <div className="mb-6 bg-slate-800 border border-slate-700 p-3 rounded-md text-xs font-mono text-center tracking-wider shadow-sm text-yellow-400">
-          ACESSO RESTRITO - MODO AUDITORIA / ÓRGÃO DE CONTROLE
+        <div className="bg-slate-800 border border-slate-700 p-3 rounded-md text-xs font-mono text-center tracking-wider shadow-sm text-yellow-400">
+          ACESSO RESTRITO - CONTROLADORIA INTERNA E TRIBUNAL DE CONTAS
         </div>
 
-        <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b border-slate-700 pb-4 items-center">
+        <nav className="text-sm font-medium flex flex-wrap gap-2 border-b border-slate-700 pb-4 items-center">
           <Link href="/" className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 py-1.5 rounded-md transition-all">← Voltar para Operação (DFD)</Link>
           <span className="text-yellow-400 font-bold bg-yellow-900/30 border border-yellow-700/50 px-3 py-1.5 rounded-md shadow-sm">🛡️ Painel de Controle Consolidado</span>
         </nav>
 
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-white">Linha do Tempo Processual</h1>
+        <header>
+          <h1 className="text-3xl font-bold text-white">Dashboard de Auditoria Estrutural</h1>
           <p className="text-slate-400 mt-1">Visão Executiva do Processo Licitatório de: <strong className="text-yellow-400">{dadosProcesso.objeto}</strong></p>
+          {dadosProcesso.orgao && (
+            <p className="text-xs text-blue-400 font-mono mt-2">Órgão Vinculado: {dadosProcesso.orgao.cidade} | População IBGE: {dadosProcesso.orgao.populacao}</p>
+          )}
         </header>
 
-        {/* TIMELINE RESTAURADA */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-10">
+        {/* TIMELINE INTACTA */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className={`p-5 rounded-xl border ${dadosProcesso.etapas.dfd ? 'bg-green-900/20 border-green-500/50' : 'bg-slate-800 border-slate-700'}`}>
             <div className="flex justify-between items-start mb-2"><span className="font-bold text-white">1. DFD</span>{dadosProcesso.etapas.dfd ? <span className="text-green-400 font-bold text-xl">✓</span> : <span className="text-slate-500 text-xs">Pendente</span>}</div>
             <p className="text-xs text-slate-400">Metadados PCA Ativos</p>
@@ -157,31 +207,57 @@ export default function ModoAuditoria() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* PAINEL DE RELATÓRIO E EXPORTAÇÃO */}
+          
+          {/* === NOVO BLOCO: TERMÔMETRO IGEP === */}
           <div className="bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-xl flex flex-col justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white mb-6 border-b border-slate-700 pb-3">Dossiê Estratégico do Processo</h2>
-              <div className="space-y-4">
-                <div className="bg-slate-900 p-4 rounded-lg flex justify-between items-center border border-slate-700">
-                  <div>
-                    <span className="block text-xs text-slate-400 font-mono mb-1">HASH ATUAL DA PESQUISA (IN 65)</span>
-                    <span className={`font-mono text-sm ${dadosProcesso.etapas.in65 ? 'text-indigo-300 break-all' : 'text-slate-500'}`}>{dadosProcesso.in65Hash}</span>
-                  </div>
+              <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">📊 Termômetro de Risco (IGEP)</h2>
+              <p className="text-sm text-slate-400 mb-6 pb-4 border-b border-slate-700">Índice Geral de Exposição Processual para Controladores.</p>
+              
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="flex flex-col">
+                  <label className="text-xs font-bold text-slate-400 mb-2 uppercase">Volume Financeiro Estimado</label>
+                  <select value={volumeFinanceiro} onChange={(e) => setVolumeFinanceiro(e.target.value)} className="p-3 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm outline-none focus:ring-2 focus:ring-yellow-500">
+                    <option value="Baixo">Baixo (Até R$ 50 mil)</option>
+                    <option value="Medio">Médio (Até R$ 1 Milhão)</option>
+                    <option value="Alto">Alto (Acima de R$ 1 Milhão)</option>
+                  </select>
                 </div>
-                <p className="text-sm text-slate-400 text-justify">
-                  O relatório consolidado agrupa as informações de conformidade legal de todas as etapas preparatórias, atestando a integridade das peças geradas via GovTech-Engine.
-                </p>
+                <div className="flex flex-col">
+                  <label className="text-xs font-bold text-slate-400 mb-2 uppercase">Complexidade do Objeto</label>
+                  <select value={complexidade} onChange={(e) => setComplexidade(e.target.value)} className="p-3 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm outline-none focus:ring-2 focus:ring-yellow-500">
+                    <option value="Comum">Bem/Serviço Comum</option>
+                    <option value="Alta">Engenharia ou TI Especializada</option>
+                  </select>
+                </div>
               </div>
+
+              <button onClick={calcularIGEP} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-colors border border-slate-600 mb-6 shadow-sm">
+                Calcular Exposição Processual (IGEP)
+              </button>
+
+              {scoreIgep !== null && (
+                <div className={`p-6 rounded-xl border animate-fadeIn flex flex-col items-center justify-center text-center ${scoreIgep <= 25 ? 'bg-green-900/20 border-green-500/50' : scoreIgep <= 50 ? 'bg-yellow-900/20 border-yellow-500/50' : 'bg-red-900/20 border-red-500/50'}`}>
+                  <span className="text-slate-400 text-xs font-bold uppercase mb-2">Score de Risco Calculado</span>
+                  <div className={`text-6xl font-bold font-mono mb-2 ${scoreIgep <= 25 ? 'text-green-400' : scoreIgep <= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {scoreIgep}
+                  </div>
+                  <span className={`text-lg font-bold ${scoreIgep <= 25 ? 'text-green-300' : scoreIgep <= 50 ? 'text-yellow-300' : 'text-red-300'}`}>
+                    {classificacaoIgep}
+                  </span>
+                </div>
+              )}
             </div>
-            <button onClick={exportarRelatorioConsolidado} className="w-full mt-6 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-4 rounded-xl transition-colors shadow-md text-lg">
-              📄 Baixar Relatório Consolidado de Governança
+            
+            <button onClick={exportarRelatorioConsolidado} className="w-full mt-8 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-4 rounded-xl transition-colors shadow-md text-lg">
+              📄 Exportar Relatório para Controladoria
             </button>
           </div>
 
-          {/* O NOVO SCANNER DE INTEGRIDADE (SPRINT 5) */}
+          {/* SCANNER DE INTEGRIDADE INTACTO */}
           <div className="bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-xl">
-            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">🔍 Validador Criptográfico de Integridade</h2>
-            <p className="text-sm text-slate-400 mb-6 pb-4 border-b border-slate-700">Conectado via Webhook à rede de registro imutável WORM (Simulação).</p>
+            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">🔍 Validador Criptográfico WORM</h2>
+            <p className="text-sm text-slate-400 mb-6 pb-4 border-b border-slate-700">Conectado via Webhook à rede de registro imutável (Simulação).</p>
 
             <form onSubmit={validarSeloCriptografico} className="space-y-4">
               <div className="flex flex-col">
@@ -191,11 +267,11 @@ export default function ModoAuditoria() {
                   value={hashInput} 
                   onChange={(e) => setHashInput(e.target.value)} 
                   required 
-                  className="p-4 bg-slate-900 border border-slate-600 rounded-lg outline-none focus:ring-2 focus:ring-yellow-500 text-white font-mono text-sm" 
+                  className="p-4 bg-slate-900 border border-slate-600 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono text-sm" 
                   placeholder="Ex: bfe52d21be5fa4f4577a17..." 
                 />
               </div>
-              <button type="submit" disabled={validando} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-colors disabled:bg-slate-800 disabled:text-slate-500 border border-slate-600">
+              <button type="submit" disabled={validando} className="w-full bg-blue-900 hover:bg-blue-800 text-white font-bold py-3 rounded-lg transition-colors disabled:bg-slate-800 disabled:text-slate-500 border border-blue-700">
                 {validando ? 'Processando Autenticidade...' : 'Verificar Autenticidade do Documento'}
               </button>
             </form>
