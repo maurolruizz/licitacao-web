@@ -5,6 +5,7 @@ const API_URL = isProducao
   : 'http://localhost:8000/api/v1';
 
 export const licitacaoService = {
+  // --- ROTAS ORIGINAIS (REGRESSÃO ZERO) ---
   gerarDFD: async (dados: any) => {
     const response = await fetch(`${API_URL}/gerar-dfd`, {
       method: 'POST',
@@ -65,10 +66,27 @@ export const licitacaoService = {
     return response.json();
   },
 
-  // NOVA ROTA (Projeto Apex - Data Moat)
   obterDataMoatStats: async () => {
     const response = await fetch(`${API_URL}/data-lake/stats`);
     if (!response.ok) throw new Error('Erro ao conectar com o Data Lake.');
+    return response.json();
+  },
+
+  // --- NOVAS ROTAS V2 (BANCO DE DADOS - ADIÇÃO SEM SUPRESSÃO) ---
+  // Estas rotas utilizam o endpoint /api/v2 conforme definido no novo main.py
+  salvarNoBanco: async (dados: any) => {
+    const response = await fetch(`${API_URL.replace('v1', 'v2')}/processo/salvar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dados),
+    });
+    if (!response.ok) throw new Error('Erro ao salvar no Banco de Dados');
+    return response.json();
+  },
+
+  recuperarDoBanco: async (id: string) => {
+    const response = await fetch(`${API_URL.replace('v1', 'v2')}/processo/${id}`);
+    if (!response.ok) throw new Error('Erro ao recuperar do Banco de Dados');
     return response.json();
   }
 };
