@@ -88,5 +88,12 @@ export const licitacaoService = {
     const response = await fetch(`${API_URL.replace('v1', 'v2')}/processo/${id}`);
     if (!response.ok) throw new Error('Erro ao recuperar do Banco de Dados');
     return response.json();
+  },
+
+  // === NOVA ROTA (INJETADA COM REGRESSÃO ZERO) ===
+  listarDoBanco: async (cidade: string) => {
+    const response = await fetch(`${API_URL.replace('v1', 'v2')}/processos/${encodeURIComponent(cidade)}`);
+    if (!response.ok) throw new Error('Erro ao listar processos do Banco de Dados');
+    return response.json();
   }
 };
