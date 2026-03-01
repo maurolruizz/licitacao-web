@@ -14,7 +14,8 @@ export default function UpgradePlanos() {
     }
   }, []);
 
-  const gerarPropostaEmpenho = () => {
+  // FUNÇÃO DINÂMICA: Agora recebe os meses e o valor para gerar o PDF exato
+  const gerarPropostaEmpenho = (meses: number, valor: string) => {
     if (!orgao) return;
     
     const conteudo = `
@@ -39,14 +40,14 @@ export default function UpgradePlanos() {
         <tbody>
           <tr>
             <td style="padding: 8px;">Licença GovTech Engine (Acessos Ilimitados ao Órgão)</td>
-            <td style="padding: 8px; text-align: center;">12 Meses</td>
-            <td style="padding: 8px; text-align: center;"><strong>R$ 24.840,00</strong></td>
+            <td style="padding: 8px; text-align: center;">${meses} Meses</td>
+            <td style="padding: 8px; text-align: center;"><strong>R$ ${valor}</strong></td>
           </tr>
         </tbody>
       </table>
       
       <p style="font-family: Arial; font-size: 10pt; text-align: justify; line-height: 1.5; background-color: #fefce8; padding: 10px; border: 1px dashed #eab308; margin-top: 15px;">
-        <strong>Enquadramento Jurídico:</strong> O valor global anual desta proposta (R$ 24.840,00) encontra-se estritamente dentro do limite legal de R$ 59.906,02, permitindo a contratação direta mediante <strong>Dispensa de Licitação</strong>, conforme expresso no Art. 75, inciso II, da Lei 14.133/2021.
+        <strong>Enquadramento Jurídico:</strong> O valor global desta proposta (R$ ${valor}) encontra-se estritamente dentro do limite legal de R$ 59.906,02, permitindo a contratação direta mediante <strong>Dispensa de Licitação</strong>, conforme expresso no Art. 75, inciso II, da Lei 14.133/2021.
       </p>
 
       <h3 style="font-family: Arial; font-size: 12pt; border-bottom: 1px solid #ccc; padding-bottom: 4px;">3. Dados para Empenho e Pagamento</h3>
@@ -66,8 +67,12 @@ export default function UpgradePlanos() {
     const blob = new Blob(['\ufeff', conteudo], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = 'Proposta_Comercial_GovTech_Anual.doc';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    a.href = url; 
+    a.download = `Proposta_Comercial_GovTech_${meses}_Meses.doc`;
+    document.body.appendChild(a); 
+    a.click(); 
+    document.body.removeChild(a); 
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -79,7 +84,6 @@ export default function UpgradePlanos() {
           <p className="text-lg text-slate-600">Assine o GovTech Engine via <strong className="text-blue-600">Dispensa de Licitação (Art. 75, II)</strong> e mitigue os riscos do TCU.</p>
         </div>
 
-        {/* ESTRUTURA REFEITA PARA 3 COLUNAS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           
           {/* PLANO TRIMESTRAL */}
@@ -102,9 +106,17 @@ export default function UpgradePlanos() {
                 <li className="flex items-center gap-2 text-slate-400">❌ Acesso ao Data Moat (Analytics)</li>
                 <li className="flex items-center gap-2 text-slate-400">❌ Automação IBGE Integrada</li>
               </ul>
-              <button onClick={() => alert("Gateway de Cartão (3x sem juros) será acoplado aqui.")} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition-colors shadow-lg text-sm mt-auto">
-                Pagar com Cartão (CPGF)
-              </button>
+              <div className="mt-auto">
+                <button onClick={() => alert("Gateway de Cartão (3x sem juros) será acoplado aqui.")} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-lg transition-colors shadow-md text-sm mb-3">
+                  💳 Pagar em até 3x (CPGF)
+                </button>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
+                  <p className="text-[11px] text-slate-600 font-bold mb-2 uppercase">Pagamento via Empenho/PIX Oficial</p>
+                  <button onClick={() => gerarPropostaEmpenho(3, '8.850,00')} className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2 text-xs">
+                    📄 Gerar Proposta PDF Oficial
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -128,13 +140,21 @@ export default function UpgradePlanos() {
                 <li className="flex items-center gap-2">✅ Matriz de Risco e Validador WORM</li>
                 <li className="flex items-center gap-2 text-slate-400">❌ Acesso Premium ao Data Moat</li>
               </ul>
-              <button onClick={() => alert("Gateway de Cartão (6x sem juros) será acoplado aqui.")} className="w-full bg-blue-800 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg text-sm mt-auto">
-                Pagar com Cartão (CPGF)
-              </button>
+              <div className="mt-auto">
+                <button onClick={() => alert("Gateway de Cartão (6x sem juros) será acoplado aqui.")} className="w-full bg-blue-800 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md text-sm mb-3">
+                  💳 Pagar em até 6x (CPGF)
+                </button>
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center">
+                  <p className="text-[11px] text-blue-800 font-bold mb-2 uppercase">Pagamento via Empenho/PIX Oficial</p>
+                  <button onClick={() => gerarPropostaEmpenho(6, '13.800,00')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2 text-xs">
+                    📄 Gerar Proposta PDF Oficial
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* PLANO ANUAL (O MAIS ESCOLHIDO / EMPENHO) */}
+          {/* PLANO ANUAL (O MAIS ESCOLHIDO) */}
           <div className="bg-blue-600 rounded-2xl shadow-2xl border-2 border-yellow-400 overflow-hidden relative flex flex-col transform md:-translate-y-4">
             <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">
               Mais Escolhido
@@ -157,20 +177,17 @@ export default function UpgradePlanos() {
                 <li className="flex items-center gap-2">✅ Automação API IBGE Ativa</li>
                 <li className="flex items-center gap-2">✅ Suporte Prioritário Exclusivo</li>
               </ul>
-              
               <div className="mt-auto">
                 <button onClick={() => alert("Gateway de Cartão (12x sem juros) será acoplado aqui.")} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-lg transition-colors shadow-md text-sm mb-3">
                   💳 Pagar em até 12x (CPGF)
                 </button>
-                
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center">
                   <p className="text-[11px] text-blue-800 font-bold mb-2 uppercase">Pagamento via Empenho/PIX Oficial</p>
-                  <button onClick={gerarPropostaEmpenho} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md flex items-center justify-center gap-2 text-xs">
+                  <button onClick={() => gerarPropostaEmpenho(12, '24.840,00')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md flex items-center justify-center gap-2 text-xs">
                     📄 Gerar Proposta PDF Oficial
                   </button>
                 </div>
               </div>
-
             </div>
           </div>
 
