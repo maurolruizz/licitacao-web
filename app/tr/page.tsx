@@ -52,7 +52,6 @@ export default function PaginaTR() {
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
 
-  // MODO MUNICÍPIO PEQUENO MANUAL
   const ativarModoPequeno = () => {
     if (isTravadoPeloIbge) return; 
     
@@ -101,6 +100,24 @@ export default function PaginaTR() {
       const data = await licitacaoService.gerarTR(payload);
       setResultado(data);
       localStorage.setItem('licitacao_tr_status', 'concluido');
+
+      // ==========================================================
+      // INJEÇÃO V3.0: PERSISTÊNCIA SILENCIOSA (ATUALIZAR BANCO)
+      // ==========================================================
+      const processId = localStorage.getItem('licitacao_id_processo');
+      const orgaoAtual = JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}');
+
+      if (processId) {
+        await licitacaoService.salvarNoBanco({
+          id_processo: processId,
+          cidade: orgaoAtual.cidade || 'Não Conectado',
+          objeto: payload.objeto_da_compra,
+          dados_completos: { fase_atual: 'TR_CONCLUIDO', payload_tr: payload },
+          hash_auditoria: data.hash
+        });
+      }
+      // ==========================================================
+
     } catch (err: any) {
       setErro(err.toString());
     } finally {
@@ -125,7 +142,6 @@ export default function PaginaTR() {
     URL.revokeObjectURL(url);
   };
 
-  // TELA DE BLOQUEIO RESTAURADA
   if (bloqueado) {
     return (
       <main className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
@@ -174,7 +190,6 @@ export default function PaginaTR() {
           </button>
         </header>
         
-        {/* FORMULÁRIO EXPANDIDO RESTAURADO */}
         <form onSubmit={prepararEnvio} className="grid grid-cols-1 lg:grid-cols-2 gap-8 bg-white p-8 rounded-xl shadow-sm border border-slate-200">
           
           <div className="space-y-6">
@@ -219,7 +234,7 @@ export default function PaginaTR() {
 
           <div className="lg:col-span-2 mt-4">
             <button type="submit" disabled={loading} className="w-full bg-green-800 text-white font-bold py-4 rounded-xl hover:bg-green-700 disabled:bg-slate-400 transition-all shadow-md text-lg">
-              {loading ? 'Gerando Hash Absoluto...' : 'Assinar e Gerar TR Auditável'}
+              {loading ? 'Gerando Hash e Salvando na Nuvem...' : 'Assinar e Gerar TR Auditável'}
             </button>
           </div>
         </form>
@@ -241,7 +256,6 @@ export default function PaginaTR() {
         )}
       </div>
 
-      {/* MODAL COM CHECKBOX RESTAURADO */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-green-600">
@@ -257,7 +271,7 @@ export default function PaginaTR() {
                   className="mt-1 w-5 h-5 text-green-600 rounded border-slate-300"
                 />
                 <span className="text-sm font-semibold text-slate-800 text-justify">
-                  Declaro que as informações acima refletem a necessidade real do órgão e aprovo a gravação do Hash Probatório.
+                  Declaro que as informações acima refletem a necessidade real do órgão e aprovo a gravação do Hash Probatório na Nuvem.
                 </span>
               </label>
             </div>

@@ -29,7 +29,7 @@ export default function PaginaETP() {
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
 
-  // === NOVO MOTOR: ORÁCULO DO TCU (JURISPRUDÊNCIA VINCULADA) ===
+  // === MOTOR: ORÁCULO DO TCU (JURISPRUDÊNCIA VINCULADA) ===
   const alertaJurisprudencia = useMemo(() => {
     const termo = objeto.toLowerCase();
     if (termo.includes('software') || termo.includes('sistema') || termo.includes('tecnologia') || termo.includes('ti')) {
@@ -56,7 +56,7 @@ export default function PaginaETP() {
     return null;
   }, [objeto]);
 
-  // CÁLCULO AUTOMÁTICO DE CLASSIFICAÇÃO (HEATMAP) - Intacto
+  // CÁLCULO AUTOMÁTICO DE CLASSIFICAÇÃO (HEATMAP)
   const classificacaoRisco = useMemo(() => {
     if (!probabilidade || !impacto) return 'Não Avaliado';
     if (probabilidade === 'Alta' && impacto === 'Alto') return 'Risco Crítico';
@@ -125,8 +125,27 @@ export default function PaginaETP() {
     };
 
     try {
+      // 1. Gera o Documento ETP
       const data = await licitacaoService.gerarETP(payload);
       setResultado(data);
+
+      // ==========================================================
+      // INJEÇÃO V3.0: PERSISTÊNCIA SILENCIOSA (ATUALIZAR BANCO)
+      // ==========================================================
+      const processId = localStorage.getItem('licitacao_id_processo');
+      const orgaoAtual = JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}');
+
+      if (processId) {
+        await licitacaoService.salvarNoBanco({
+          id_processo: processId,
+          cidade: orgaoAtual.cidade || 'Não Conectado',
+          objeto: payload.objeto_da_compra,
+          dados_completos: { fase_atual: 'ETP_CONCLUIDO', payload_etp: payload },
+          hash_auditoria: data.hash
+        });
+      }
+      // ==========================================================
+
     } catch (err: any) {
       setErro(err.toString());
     } finally {
@@ -175,7 +194,7 @@ export default function PaginaETP() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             
-            {/* NOVO: ALERTA DO ORÁCULO TCU */}
+            {/* ALERTA DO ORÁCULO TCU */}
             {alertaJurisprudencia && (
               <div className="bg-purple-50 border-l-4 border-purple-600 p-5 rounded-r-lg shadow-sm animate-fadeIn">
                 <div className="flex items-center gap-2 mb-2">
@@ -307,7 +326,7 @@ export default function PaginaETP() {
               </div>
 
               <button type="submit" disabled={loading} className="w-full bg-blue-900 text-white font-bold py-4 rounded-xl hover:bg-blue-800 disabled:bg-slate-400 transition-all shadow-md text-lg">
-                {loading ? 'Processando Matriz Decisória...' : 'Assinar e Gerar ETP Auditável'}
+                {loading ? 'Processando e Salvando na Nuvem...' : 'Assinar e Gerar ETP Auditável'}
               </button>
             </form>
 
@@ -351,7 +370,7 @@ export default function PaginaETP() {
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
             <h3 className="text-xl font-bold text-slate-900 mb-2">Selo de Hash Absoluto - ETP</h3>
             <p className="text-sm text-slate-600 mb-4 text-justify">
-              O sistema consolidou a sua Matriz de Alternativas (TCO) e a sua Matriz Quantificada de Riscos. A decisão técnica é de sua inteira responsabilidade.
+              O sistema consolidou a sua Matriz de Alternativas (TCO) e a sua Matriz Quantificada de Riscos.
             </p>
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
               <label className="flex items-start gap-3 cursor-pointer">
@@ -362,13 +381,13 @@ export default function PaginaETP() {
                   className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300"
                 />
                 <span className="text-sm font-semibold text-slate-800 text-justify">
-                  Declaro que revisei os cenários inseridos e atesto a viabilidade. Autorizo a gravação das variáveis no Hash de Auditoria.
+                  Declaro que revisei os cenários inseridos e atesto a viabilidade. Autorizo a gravação das variáveis no Hash de Auditoria e na Nuvem.
                 </span>
               </label>
             </div>
             <div className="flex gap-3 justify-end mt-4">
               <button onClick={() => setModalAberto(false)} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-md">Cancelar</button>
-              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 shadow-sm">Autorizar Hash Absoluto</button>
+              <button onClick={executarEnvioBlindado} disabled={!termoAceito} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 disabled:bg-slate-300 shadow-sm">Autorizar e Salvar</button>
             </div>
           </div>
         </div>

@@ -76,8 +76,30 @@ export default function Home() {
     };
 
     try {
+      // 1. Gera o Documento e o Hash (Lógica Original Intacta)
       const data = await licitacaoService.gerarDFD(payload);
       setResultado(data);
+
+      // ==========================================================
+      // INJEÇÃO V3.0: PERSISTÊNCIA SILENCIOSA NO BANCO DE DADOS
+      // ==========================================================
+      let processId = localStorage.getItem('licitacao_id_processo');
+      if (!processId) {
+        processId = `PROC-${Date.now()}`;
+        localStorage.setItem('licitacao_id_processo', processId);
+      }
+
+      const orgaoAtual = JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}');
+      
+      await licitacaoService.salvarNoBanco({
+        id_processo: processId,
+        cidade: orgaoAtual.cidade || 'Não Conectado',
+        objeto: payload.objeto_da_compra,
+        dados_completos: { fase_atual: 'DFD_CONCLUIDO', payload_dfd: payload },
+        hash_auditoria: data.hash
+      });
+      // ==========================================================
+
     } catch (err: any) {
       setErro(err.toString());
     } finally {
@@ -199,7 +221,6 @@ export default function Home() {
               </select>
             </div>
 
-            {/* GOVERNANÇA PCA RESTAURADA */}
             <div className="flex flex-col p-5 bg-slate-50 border border-slate-300 rounded-md">
               <label className="text-sm font-bold text-slate-800 mb-2">A Contratação está prevista no PCA (Plano de Contratações Anual)?</label>
               <div className="flex gap-4 mb-4">
@@ -227,7 +248,7 @@ export default function Home() {
             </div>
 
             <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-md hover:bg-slate-800 disabled:bg-slate-400 transition-all shadow-md">
-              {loading ? 'Gerando Hash Absoluto...' : 'Gerar DFD Auditável'}
+              {loading ? 'Gerando Hash e Salvando na Nuvem...' : 'Gerar DFD Auditável'}
             </button>
           </form>
 
@@ -249,12 +270,11 @@ export default function Home() {
         </div>
       </div>
 
-      {/* MODAL COM CHECKBOX RESTAURADO */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
             <h3 className="text-xl font-bold text-slate-900 mb-2">Assinatura de Hash Absoluto</h3>
-            <p className="text-sm text-slate-600 mb-4 text-justify">O Hash gerado a partir deste momento vinculará <strong>todas as variáveis inseridas no formulário</strong>, garantindo proteção contra reprocessamento posterior.</p>
+            <p className="text-sm text-slate-600 mb-4 text-justify">O Hash gerado a partir deste momento vinculará <strong>todas as variáveis inseridas no formulário</strong>, salvando-as de forma segura na nuvem governamental.</p>
             
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
               <label className="flex items-start gap-3 cursor-pointer">
