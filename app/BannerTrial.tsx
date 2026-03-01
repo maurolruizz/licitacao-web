@@ -10,7 +10,6 @@ export default function BannerTrial() {
   const router = useRouter();
 
   useEffect(() => {
-    // Ignora a trava nas telas de login e cadastro
     if (pathname === '/login' || pathname === '/cadastro') return;
 
     const data = localStorage.getItem('licitacao_auth');
@@ -20,7 +19,6 @@ export default function BannerTrial() {
       const parsed = JSON.parse(data);
       setAuthData(parsed);
       
-      // Calcula dias restantes do Trial
       const dataCadastro = new Date(parsed.data_cadastro);
       const dataAtual = new Date();
       const diffTime = Math.abs(dataAtual.getTime() - dataCadastro.getTime());
@@ -51,7 +49,11 @@ export default function BannerTrial() {
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
           <span>Licença Trial GovTech: <strong className="text-yellow-400">{diasRestantes} dias restantes</strong></span>
         </div>
-        <button className="bg-yellow-500 hover:bg-yellow-400 text-yellow-900 font-bold px-3 py-1 rounded transition-colors text-xs uppercase tracking-wider">
+        {/* A ÚNICA ALTERAÇÃO: Adicionado o redirecionamento para /upgrade */}
+        <button 
+          onClick={() => router.push('/upgrade')} 
+          className="bg-yellow-500 hover:bg-yellow-400 text-yellow-900 font-bold px-3 py-1 rounded transition-colors text-xs uppercase tracking-wider"
+        >
           Fazer Upgrade
         </button>
         <button onClick={handleLogout} className="text-slate-400 hover:text-white ml-2 text-xs transition-colors">
