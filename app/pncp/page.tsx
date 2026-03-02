@@ -19,7 +19,7 @@ export default function PaginaPNCP() {
   const [loading, setLoading] = useState(false);
   const [resultadosDaBusca, setResultadosDaBusca] = useState<any[]>([]);
   
-  // Dicionário para guardar as seleções de cada item do lote: { index: [selecionados] }
+  // Dicionário para guardar as seleções de cada item do lote
   const [selecoesPorItem, setSelecoesPorItem] = useState<Record<number, any[]>>({});
 
   useEffect(() => {
@@ -74,14 +74,11 @@ export default function PaginaPNCP() {
   };
 
   const aplicarCorrecaoIPCA = (precoItem: any) => {
-    // Simulação de Correção Monetária IN 65 (Ex: +4.8% para base de preços antiga)
     const valorCorrigido = precoItem.valor_unitario * 1.048;
     const itemModificado = { ...precoItem, valor_unitario: valorCorrigido, corrigidoIPCA: true };
     
-    // Atualiza nos resultados da busca
     setResultadosDaBusca(resultadosDaBusca.map(r => r.id_compra === precoItem.id_compra ? itemModificado : r));
     
-    // Atualiza nos selecionados se estiver lá
     if (selecionadosAtuais.find(s => s.id_compra === precoItem.id_compra)) {
       const novaSelecao = selecionadosAtuais.map(s => s.id_compra === precoItem.id_compra ? itemModificado : s);
       setSelecoesPorItem({ ...selecoesPorItem, [itemAtivoIndex]: novaSelecao });
@@ -98,12 +95,10 @@ export default function PaginaPNCP() {
     
     if (n === 1) return { media, dp: 0, cv: 0, valid: false };
 
-    // Variância Amostral
     const somaDosQuadrados = selecionadosAtuais.reduce((acc, curr) => acc + Math.pow(curr.valor_unitario - media, 2), 0);
     const variancia = somaDosQuadrados / (n - 1);
     const dp = Math.sqrt(variancia);
     
-    // Coeficiente de Variação (CV)
     const cv = (dp / media) * 100;
     
     return { media, dp, cv, valid: n >= 3 };
@@ -118,25 +113,23 @@ export default function PaginaPNCP() {
       const proximoIndice = itemAtivoIndex + 1;
       setItemAtivoIndex(proximoIndice);
       setTermoBusca(itensParaPesquisar[proximoIndice].nome);
-      setResultadosDaBusca([]); // Limpa a busca para o próximo item
+      setResultadosDaBusca([]); 
     } else {
-      // Concluiu todos os itens
       salvarEConcluir();
     }
   };
 
   const salvarEConcluir = () => {
     if (estatisticas.cv > 25) {
-      const confirmar = window.confirm("O Coeficiente de Variação (CV) do último item está acima de 25%, o que contraria a recomendação do TCU. Deseja prosseguir mesmo assim (assumindo o risco)?");
+      const confirmar = window.confirm("O Coeficiente de Variação (CV) do último item está acima de 25%, contrariando o TCU. Deseja prosseguir assumindo o risco?");
       if (!confirmar) return;
     }
     
-    // Consolida o Valor Global
     let valorGlobal = 0;
     itensParaPesquisar.forEach((item, index) => {
       const sel = selecoesPorItem[index] || [];
       const med = sel.reduce((a, b) => a + b.valor_unitario, 0) / (sel.length || 1);
-      valorGlobal += med * item.quantidade;
+      valorGlobal += med * (item.quantidade || 1);
     });
 
     localStorage.setItem('licitacao_pncp_concluido', 'true');
@@ -175,20 +168,18 @@ export default function PaginaPNCP() {
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* COLUNA ESQUERDA: BUSCA E RESULTADOS */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
               <div className="flex flex-col mb-4 border-l-4 border-purple-500 pl-4 py-2 bg-purple-50 rounded-r-md">
-                <span className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-1">Alvo da Pesquisa (Integrado ao TR)</span>
-                <span className="text-lg font-bold text-slate-800">{itemAtivo?.nome}</span>
+                <span className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-1">Alvo da Pesquisa</span>
+                <span className="text-lg font-bold text-slate-800">{itemAtivo?.nome || 'Carregando...'}</span>
                 {itemAtivo?.especificacao && <span className="text-xs text-slate-500">{itemAtivo.especificacao}</span>}
               </div>
 
               <div className="flex items-end gap-4 mt-6">
                 <div className="flex-1">
-                  <label className="text-sm font-bold text-slate-800 mb-2 block">Parâmetro de Busca (PNCP / Banco de Preços)</label>
-                  <input value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full p-3 border border-slate-300 rounded-md outline-none bg-white focus:ring-2 focus:ring-purple-500 text-sm" placeholder="Refine o termo de busca..." />
+                  <label className="text-sm font-bold text-slate-800 mb-2 block">Parâmetro de Busca</label>
+                  <input value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full p-3 border border-slate-300 rounded-md outline-none bg-white focus:ring-2 focus:ring-purple-500 text-sm" placeholder="Refine o termo..." />
                 </div>
                 <button onClick={() => buscarPrecos(termoBusca)} disabled={loading} className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 px-6 rounded-md transition-colors shadow-sm text-sm">
                   {loading ? 'Consultando...' : '🔍 Buscar Bases'}
@@ -230,7 +221,6 @@ export default function PaginaPNCP() {
             )}
           </div>
 
-          {/* COLUNA DIREITA: MATEMÁTICA E GOVERNANÇA */}
           <div className="space-y-6">
             <div className="bg-slate-900 p-6 rounded-xl shadow-lg border border-slate-800 text-white sticky top-6">
               <h3 className="font-bold text-slate-100 mb-6 border-b border-slate-700 pb-2 flex items-center gap-2">
@@ -256,15 +246,15 @@ export default function PaginaPNCP() {
 
               {estatisticas.cv > 25 && (
                 <div className="mt-4 p-3 bg-red-950/80 border border-red-800 rounded-md text-xs text-red-200 leading-relaxed text-justify">
-                  ⚠️ <strong>ALERTA TCU:</strong> CV superior a 25% indica alta dispersão. Recomenda-se o expurgo do valor extremo (outlier) para evitar distorção do preço estimado e apontamento de sobrepreço.
+                  ⚠️ <strong>ALERTA TCU:</strong> CV superior a 25% indica alta dispersão. Recomenda-se o expurgo do valor extremo (outlier).
                 </div>
               )}
 
               <div className="mt-8 border-t border-slate-700 pt-6">
                 <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider text-center">Valor Unitário Saneado (Média)</p>
                 <p className="text-3xl font-bold text-center text-green-400">R$ {estatisticas.media.toFixed(2).replace('.', ',')}</p>
-                {isAgrupado && (
-                  <p className="text-center text-xs text-slate-500 mt-2">Valor Total do Item: R$ {(estatisticas.media * itemAtivo.quantidade).toFixed(2).replace('.', ',')}</p>
+                {isAgrupado && itemAtivo && (
+                  <p className="text-center text-xs text-slate-500 mt-2">Valor Total do Item: R$ {(estatisticas.media * (itemAtivo.quantidade || 1)).toFixed(2).replace('.', ',')}</p>
                 )}
               </div>
 

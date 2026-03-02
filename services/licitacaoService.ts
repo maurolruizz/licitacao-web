@@ -36,6 +36,7 @@ export const licitacaoService = {
     return response.json();
   },
 
+  // FUNÇÃO ANTIGA MANTIDA PARA REGRESSÃO ZERO
   buscarPrecosPNCP: async (palavraChave: string) => {
     const response = await fetch(`${API_URL}/pesquisa-pncp`, {
       method: 'POST',
@@ -43,6 +44,17 @@ export const licitacaoService = {
       body: JSON.stringify({ palavra_chave: palavraChave }),
     });
     if (!response.ok) throw new Error('Erro ao buscar preços na IN 65');
+    return response.json();
+  },
+
+  // NOVA FUNÇÃO EXATAMENTE COMO O APP/PNCP/PAGE.TSX EXIGE
+  pesquisarPNCP: async (palavra_chave: string) => {
+    const response = await fetch(`${API_URL}/pesquisa-pncp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ palavra_chave }),
+    });
+    if (!response.ok) throw new Error('Erro ao buscar preços no PNCP');
     return response.json();
   },
 
@@ -73,7 +85,6 @@ export const licitacaoService = {
   },
 
   // --- NOVAS ROTAS V2 (BANCO DE DADOS - ADIÇÃO SEM SUPRESSÃO) ---
-  // Estas rotas utilizam o endpoint /api/v2 conforme definido no novo main.py
   salvarNoBanco: async (dados: any) => {
     const response = await fetch(`${API_URL.replace('v1', 'v2')}/processo/salvar`, {
       method: 'POST',
@@ -90,7 +101,6 @@ export const licitacaoService = {
     return response.json();
   },
 
-  // === NOVA ROTA (INJETADA COM REGRESSÃO ZERO) ===
   listarDoBanco: async (cidade: string) => {
     const response = await fetch(`${API_URL.replace('v1', 'v2')}/processos/${encodeURIComponent(cidade)}`);
     if (!response.ok) throw new Error('Erro ao listar processos do Banco de Dados');
