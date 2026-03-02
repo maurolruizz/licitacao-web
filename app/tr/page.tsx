@@ -13,13 +13,26 @@ export default function PaginaTR() {
   const [modoPequeno, setModoPequeno] = useState(false);
   const [isTravadoPeloIbge, setIsTravadoPeloIbge] = useState(false);
 
+  // === NOVO: INTELIGÊNCIA DO ART 40 (LOTES) ===
+  const [isAgrupado, setIsAgrupado] = useState(false);
+  const [itensLote, setItensLote] = useState<any[]>([]);
+
   useEffect(() => {
+    // Leitura da Memória do ETP
     const objetoSalvo = localStorage.getItem('licitacao_objeto');
     const especificacaoSalva = localStorage.getItem('licitacao_especificacao');
+    const isAgrupadoSalvo = localStorage.getItem('licitacao_is_agrupado');
+    const itensLoteSalvo = localStorage.getItem('licitacao_itens_lote');
     
     if (objetoSalvo && especificacaoSalva) {
       setObjeto(objetoSalvo);
       setEspecificacao(especificacaoSalva);
+      
+      // Carrega os Lotes se existirem
+      if (isAgrupadoSalvo === 'true' && itensLoteSalvo) {
+        setIsAgrupado(true);
+        setItensLote(JSON.parse(itensLoteSalvo));
+      }
     } else {
       setBloqueado(true);
     }
@@ -72,6 +85,8 @@ export default function PaginaTR() {
   const limparMemoria = () => {
     localStorage.removeItem('licitacao_objeto');
     localStorage.removeItem('licitacao_especificacao');
+    localStorage.removeItem('licitacao_is_agrupado');
+    localStorage.removeItem('licitacao_itens_lote');
     window.location.reload();
   };
 
@@ -93,7 +108,10 @@ export default function PaginaTR() {
       criterios_de_pagamento: pagamento || 'Não informado',
       obrigacoes_contratada: obrigacoes || 'Não informadas',
       modelo_execucao_gestao: modeloGestao || 'Não selecionado',
-      sancoes_aplicaveis: sancoes || 'Não selecionadas'
+      sancoes_aplicaveis: sancoes || 'Não selecionadas',
+      // INJEÇÃO DA CAMADA DE GOVERNANÇA ART 40 PARA O BACKEND
+      is_agrupado: isAgrupado,
+      itens_lote: isAgrupado ? itensLote : []
     };
 
     try {
@@ -101,9 +119,6 @@ export default function PaginaTR() {
       setResultado(data);
       localStorage.setItem('licitacao_tr_status', 'concluido');
 
-      // ==========================================================
-      // INJEÇÃO V3.0: PERSISTÊNCIA SILENCIOSA (ATUALIZAR BANCO)
-      // ==========================================================
       const processId = localStorage.getItem('licitacao_id_processo');
       const orgaoAtual = JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}');
 
@@ -116,8 +131,6 @@ export default function PaginaTR() {
           hash_auditoria: data.hash
         });
       }
-      // ==========================================================
-
     } catch (err: any) {
       setErro(err.toString());
     } finally {
@@ -158,7 +171,7 @@ export default function PaginaTR() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-8 font-sans text-slate-900">
+    <main className="min-h-screen bg-slate-50 p-8 font-sans text-slate-900 pb-20">
       <div className="max-w-6xl mx-auto">
         
         <div className="mb-6 bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono text-center tracking-wider shadow-sm flex justify-between items-center px-6">
@@ -176,14 +189,13 @@ export default function PaginaTR() {
           <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
           <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. ETP</Link>
           <span className="text-green-800 font-bold bg-green-50 border border-green-200 px-3 py-1.5 rounded-md shadow-sm">3. TR</span>
-          <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. IN 65 →</Link>
           <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
         
         <header className="mb-8 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-green-900">Termo de Referência (TR)</h1>
-            <p className="text-slate-500 text-sm mt-1">Estruturação Executiva (Art. 6º, XXIII) com Auto-Importação</p>
+            <p className="text-slate-500 text-sm mt-1">Estruturação Executiva (Art. 6º, XXIII) com Auto-Importação do ETP</p>
           </div>
           <button type="button" onClick={limparMemoria} className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-md font-bold transition-colors border border-red-200 shadow-sm">
             🗑️ Forçar Limpeza (Teste de Trava)
@@ -199,9 +211,33 @@ export default function PaginaTR() {
             </div>
 
             <div className="flex flex-col border-l-4 border-green-500 pl-4 py-2 bg-green-50/50 rounded-r-md">
-              <label className="text-sm font-semibold mb-1 flex items-center gap-2 text-green-900">Especificações Técnicas (Blindado pelo ETP)</label>
+              <label className="text-sm font-semibold mb-1 flex items-center gap-2 text-green-900">Especificações Gerais (Blindado pelo ETP)</label>
               <textarea value={especificacao} readOnly rows={4} className="p-3 border border-green-200 rounded-md outline-none bg-slate-100 font-medium leading-relaxed text-slate-600 cursor-not-allowed" />
             </div>
+
+            {/* AQUI A MÁGICA DO ART 40 ACONTECE */}
+            {isAgrupado && itensLote.length > 0 && (
+              <div className="p-5 border border-blue-200 bg-blue-50/30 rounded-lg shadow-inner">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Art. 40 Consolidado</span>
+                  <h4 className="font-bold text-blue-900 text-sm">Relação de Itens do Lote</h4>
+                </div>
+                <p className="text-xs text-slate-600 mb-3 text-justify">
+                  Esta estrutura foi validada na Matriz de Parcelamento do ETP e não pode ser alterada diretamente no TR sem nova justificativa técnica prévia.
+                </p>
+                <div className="space-y-2">
+                  {itensLote.map((item, index) => (
+                    <div key={index} className="bg-white p-3 rounded border border-blue-100 text-sm flex gap-3 shadow-sm">
+                      <div className="font-bold text-blue-800 bg-blue-50 px-2 py-1 rounded h-fit">{item.quantidade}x</div>
+                      <div>
+                        <strong className="block text-slate-800">{item.nome}</strong>
+                        <span className="text-slate-500 text-xs">{item.especificacao}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col">
               <label className="text-sm font-semibold mb-1">Prazo e Local de Entrega</label>
@@ -260,16 +296,11 @@ export default function PaginaTR() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-green-600">
             <h3 className="text-xl font-bold text-slate-900 mb-2">Assinatura de Hash Absoluto - TR</h3>
-            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema organizou os blocos obrigatórios. Ao prosseguir, o Hash Absolute (v2.3.0) registrará imutavelmente suas escolhas legais.</p>
+            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema organizou os blocos obrigatórios mantendo a coerência com as decisões tomadas no ETP (Art. 40 e Art. 18).</p>
             
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
               <label className="flex items-start gap-3 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={termoAceito}
-                  onChange={(e) => setTermoAceito(e.target.checked)}
-                  className="mt-1 w-5 h-5 text-green-600 rounded border-slate-300"
-                />
+                <input type="checkbox" checked={termoAceito} onChange={(e) => setTermoAceito(e.target.checked)} className="mt-1 w-5 h-5 text-green-600 rounded border-slate-300" />
                 <span className="text-sm font-semibold text-slate-800 text-justify">
                   Declaro que as informações acima refletem a necessidade real do órgão e aprovo a gravação do Hash Probatório na Nuvem.
                 </span>

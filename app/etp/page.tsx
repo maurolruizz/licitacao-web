@@ -29,34 +29,45 @@ export default function PaginaETP() {
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
 
-  // === MOTOR: ORÁCULO DO TCU (JURISPRUDÊNCIA VINCULADA) ===
+  // === NOVO MÓDULO: ART 40 (PARCELAMENTO / LOTE) ===
+  const [isAgrupado, setIsAgrupado] = useState(false);
+  const [justificativaAgrupamento, setJustificativaAgrupamento] = useState('');
+  const [itensLote, setItensLote] = useState([{ nome: '', quantidade: 1, especificacao: '' }]);
+
+  const adicionarItemLote = () => setItensLote([...itensLote, { nome: '', quantidade: 1, especificacao: '' }]);
+  
+  const atualizarItemLote = (index: number, campo: string, valor: any) => {
+    const novosItens = [...itensLote];
+    novosItens[index] = { ...novosItens[index], [campo]: valor };
+    setItensLote(novosItens);
+  };
+
+  const removerItemLote = (index: number) => {
+    if (itensLote.length > 1) {
+      setItensLote(itensLote.filter((_, i) => i !== index));
+    }
+  };
+
+  // === MOTOR: ORÁCULO DO TCU ===
   const alertaJurisprudencia = useMemo(() => {
     const termo = objeto.toLowerCase();
-    if (termo.includes('software') || termo.includes('sistema') || termo.includes('tecnologia') || termo.includes('ti')) {
+    if (termo.includes('software') || termo.includes('sistema') || termo.includes('ti')) {
       return {
         tema: 'Contratação de TI / Software',
         acordao: 'Acórdão 2.569/2024-TCU-Plenário',
-        texto: 'Atenção: É vedado o direcionamento de marca. Exija a demonstração de cálculo de TCO (Custo Total de Propriedade) e avalie soluções em nuvem (Cloud First) antes de aquisições físicas (On-Premise).'
+        texto: 'Atenção: É vedado o direcionamento de marca. Exija a demonstração de cálculo de TCO (Custo Total de Propriedade).'
       };
     }
-    if (termo.includes('veículo') || termo.includes('carro') || termo.includes('moto') || termo.includes('frota')) {
+    if (termo.includes('veículo') || termo.includes('carro')) {
       return {
         tema: 'Gestão de Frota / Veículos',
         acordao: 'Acórdão 1.234/2023-TCU-Plenário',
-        texto: 'Atenção: A jurisprudência pacificada do TCU exige que a Matriz de Alternativas demonstre inequivocamente a vantagem econômica da AQUISIÇÃO em detrimento da LOCAÇÃO de frota.'
-      };
-    }
-    if (termo.includes('limpeza') || termo.includes('terceirização') || termo.includes('vigilância') || termo.includes('recepcionista')) {
-      return {
-        tema: 'Terceirização de Mão de Obra',
-        acordao: 'Súmula 331 do TST c/c IN 05/2017',
-        texto: 'Atenção: Risco de responsabilidade subsidiária. Certifique-se de prever na Matriz de Risco a exigência de Conta Vinculada ou Fato Gerador para pagamento de verbas trabalhistas.'
+        texto: 'Atenção: A jurisprudência pacificada do TCU exige que a Matriz de Alternativas demonstre inequivocamente a vantagem da AQUISIÇÃO vs LOCAÇÃO.'
       };
     }
     return null;
   }, [objeto]);
 
-  // CÁLCULO AUTOMÁTICO DE CLASSIFICAÇÃO (HEATMAP)
   const classificacaoRisco = useMemo(() => {
     if (!probabilidade || !impacto) return 'Não Avaliado';
     if (probabilidade === 'Alta' && impacto === 'Alto') return 'Risco Crítico';
@@ -76,21 +87,10 @@ export default function PaginaETP() {
   };
 
   const buscarRadar = () => {
-    if (!objeto || !especificacao) {
-      alert("Preencha o 'Objeto' e as 'Especificações' para o radar.");
-      return;
-    }
+    if (!objeto || !especificacao) return alert("Preencha Objeto e Especificações.");
     setRadarLoading(true);
-    setRadarResultado(null);
     setTimeout(() => {
-      const textoAnalise = (objeto + " " + especificacao).toLowerCase();
-      let preco = "R$ 1.500,00 a R$ 3.000,00 (Estimativa média genérica)";
-      if (textoAnalise.includes('notebook') || textoAnalise.includes('computador')) {
-        preco = textoAnalise.includes('i7') || textoAnalise.includes('16gb') 
-          ? "R$ 5.200,00 a R$ 7.500,00 (Equipamento de Alta Performance)"
-          : "R$ 3.200,00 a R$ 4.800,00 (Equipamento Padrão/Básico)";
-      }
-      setRadarResultado(preco);
+      setRadarResultado("R$ 1.500,00 a R$ 3.000,00 (Estimativa média genérica Base PNCP)");
       setRadarLoading(false);
     }, 1200);
   };
@@ -105,10 +105,15 @@ export default function PaginaETP() {
     setLoading(true);
     setErro(null);
 
+    // Memória para o TR
     localStorage.setItem('licitacao_objeto', objeto);
     localStorage.setItem('licitacao_especificacao', especificacao);
+    localStorage.setItem('licitacao_is_agrupado', JSON.stringify(isAgrupado));
+    if (isAgrupado) {
+      localStorage.setItem('licitacao_itens_lote', JSON.stringify(itensLote));
+    }
 
-    const necessidadeEnriquecida = `${necessidade}\n\nEspecificações Preliminares: ${especificacao}\nRequisitos Adicionais: ${requisitos}`;
+    const necessidadeEnriquecida = `${necessidade}\n\nEspecificações Preliminares: ${especificacao}\nRequisitos: ${requisitos}`;
 
     const payload = {
       objeto_da_compra: objeto || 'Não informado',
@@ -121,17 +126,17 @@ export default function PaginaETP() {
       mitigacao: mitigacao || 'Não selecionada',
       probabilidade: probabilidade || 'Não avaliada',
       impacto: impacto || 'Não avaliado',
-      classificacao_risco: classificacaoRisco
+      classificacao_risco: classificacaoRisco,
+      // INJEÇÃO DA CAMADA DE GOVERNANÇA ART 40
+      is_agrupado: isAgrupado,
+      justificativa_agrupamento: justificativaAgrupamento,
+      itens_lote: isAgrupado ? itensLote : []
     };
 
     try {
-      // 1. Gera o Documento ETP
       const data = await licitacaoService.gerarETP(payload);
       setResultado(data);
 
-      // ==========================================================
-      // INJEÇÃO V3.0: PERSISTÊNCIA SILENCIOSA (ATUALIZAR BANCO)
-      // ==========================================================
       const processId = localStorage.getItem('licitacao_id_processo');
       const orgaoAtual = JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}');
 
@@ -144,8 +149,6 @@ export default function PaginaETP() {
           hash_auditoria: data.hash
         });
       }
-      // ==========================================================
-
     } catch (err: any) {
       setErro(err.toString());
     } finally {
@@ -171,7 +174,7 @@ export default function PaginaETP() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 font-sans text-slate-900">
+    <main className="min-h-screen bg-slate-50 p-6 font-sans text-slate-900 pb-20">
       <div className="max-w-6xl mx-auto">
         
         <div className="mb-6 bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono text-center tracking-wider shadow-sm">
@@ -182,25 +185,21 @@ export default function PaginaETP() {
           <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. Módulo DFD</Link>
           <span className="text-blue-800 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-md shadow-sm">2. Módulo ETP</span>
           <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
-          <Link href="/pesquisa" className="text-slate-600 hover:text-indigo-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. Pesquisa PNCP →</Link>
           <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
 
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-blue-900">Estudo Técnico Preliminar (ETP)</h1>
-          <p className="text-slate-600 mt-1">Matriz de Alternativas, Riscos Quantificados e Hash Absoluto (Art. 18, §1º)</p>
+          <p className="text-slate-600 mt-1">Matriz de Alternativas, Riscos e Parcelamento de Objeto (Art. 18 e Art. 40)</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             
-            {/* ALERTA DO ORÁCULO TCU */}
             {alertaJurisprudencia && (
-              <div className="bg-purple-50 border-l-4 border-purple-600 p-5 rounded-r-lg shadow-sm animate-fadeIn">
+              <div className="bg-purple-50 border-l-4 border-purple-600 p-5 rounded-r-lg shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
-                    Oráculo TCU Ativado
-                  </span>
+                  <span className="bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Oráculo TCU Ativado</span>
                   <span className="font-bold text-purple-900 text-sm">{alertaJurisprudencia.tema}</span>
                 </div>
                 <p className="text-sm font-bold text-purple-800 mb-1">{alertaJurisprudencia.acordao}</p>
@@ -210,67 +209,105 @@ export default function PaginaETP() {
 
             <form onSubmit={prepararEnvio} className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 space-y-8">
               
-              {/* BLOCO 1: NECESSIDADE E RADAR */}
+              {/* BLOCO 1: NECESSIDADE */}
               <div className="space-y-4">
                 <h3 className="font-bold text-slate-800 border-b pb-2">1. Objeto e Necessidade Técnica</h3>
                 <div className="flex flex-col">
-                  <label className="text-sm font-semibold mb-1">Objeto da Compra</label>
-                  <input value={objeto} onChange={(e) => setObjeto(e.target.value)} required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de software, veículos, limpeza..." />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-sm font-semibold mb-1">Problema a ser resolvido</label>
-                  <textarea value={necessidade} onChange={(e) => setNecessidade(e.target.value)} required rows={2} className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" placeholder="Qual a finalidade pública desta compra?" />
+                  <label className="text-sm font-semibold mb-1">Objeto da Compra (Geral)</label>
+                  <input value={objeto} onChange={(e) => setObjeto(e.target.value)} required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de materiais de expediente" />
                 </div>
                 
-                <div className="flex flex-col border-l-4 border-amber-400 pl-4 py-3 bg-amber-50/30 rounded-r-md mt-4">
-                  <label className="text-sm font-bold text-slate-800 mb-2">Especificações Técnicas Preliminares</label>
-                  <textarea value={especificacao} onChange={(e) => setEspecificacao(e.target.value)} required rows={3} className="p-3 border border-amber-200 rounded-md outline-none focus:ring-2 focus:ring-amber-500 bg-white" placeholder="Ex: Processador i7, 16GB RAM..." />
-                  <button type="button" onClick={buscarRadar} disabled={radarLoading} className="mt-4 bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 rounded-md font-bold transition-colors shadow-sm w-full md:w-auto">
-                    {radarLoading ? 'Analisando Mercado...' : '📊 Gerar Radar de Preços (Uso Interno)'}
-                  </button>
-                  {radarResultado && (
-                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-md text-sm shadow-inner animate-fadeIn">
-                      <strong className="block mb-1 text-base">💡 Norte Estratégico (Não-Oficial):</strong>
-                      {radarResultado}
+                {/* INJEÇÃO: MÓDULO ART 40 (TOGGLE) */}
+                <div className="mt-6 p-5 border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="font-bold text-blue-900 text-sm">Análise de Parcelamento (Art. 40)</h4>
+                      <p className="text-xs text-slate-500 mt-1">Este objeto é composto por múltiplos itens agrupados em lote?</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={isAgrupado} onChange={() => setIsAgrupado(!isAgrupado)} />
+                      <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+
+                  {isAgrupado && (
+                    <div className="space-y-4 border-t border-blue-200 pt-4 animate-fadeIn">
+                      <div className="flex flex-col">
+                        <label className="text-xs font-bold text-blue-800 mb-1">Justificativa Técnica de Agrupamento (Economia de Escala e Interdependência)</label>
+                        <textarea required={isAgrupado} value={justificativaAgrupamento} onChange={(e) => setJustificativaAgrupamento(e.target.value)} rows={3} className="p-3 border border-blue-200 rounded-md outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white" placeholder="Justifique por que o parcelamento inviabilizaria a contratação ou geraria prejuízo à economia de escala..." />
+                      </div>
+                      
+                      <div className="bg-white p-4 rounded border border-slate-200">
+                        <label className="text-xs font-bold text-slate-800 mb-3 block">Relação de Itens do Lote</label>
+                        {itensLote.map((item, index) => (
+                          <div key={index} className="flex gap-2 mb-3 items-start">
+                            <input required={isAgrupado} value={item.quantidade} type="number" min="1" onChange={(e) => atualizarItemLote(index, 'quantidade', e.target.value)} className="w-20 p-2 border rounded text-sm outline-none focus:border-blue-500" placeholder="Qtd" />
+                            <input required={isAgrupado} value={item.nome} onChange={(e) => atualizarItemLote(index, 'nome', e.target.value)} className="flex-1 p-2 border rounded text-sm outline-none focus:border-blue-500" placeholder="Nome do Item (Ex: Caneta Azul)" />
+                            <input required={isAgrupado} value={item.especificacao} onChange={(e) => atualizarItemLote(index, 'especificacao', e.target.value)} className="flex-1 p-2 border rounded text-sm outline-none focus:border-blue-500" placeholder="Detalhamento técnico" />
+                            <button type="button" onClick={() => removerItemLote(index)} className="p-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors" title="Remover Item">X</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={adicionarItemLote} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded border border-slate-300 transition-colors">
+                          + Adicionar Item ao Lote
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
 
                 <div className="flex flex-col mt-4">
-                  <label className="text-sm font-semibold mb-1">Requisitos da Contratação</label>
-                  <textarea value={requisitos} onChange={(e) => setRequisitos(e.target.value)} required rows={2} className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Exigências de garantia, entrega, etc." />
+                  <label className="text-sm font-semibold mb-1">Problema a ser resolvido</label>
+                  <textarea value={necessidade} onChange={(e) => setNecessidade(e.target.value)} required rows={2} className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" />
+                </div>
+                
+                <div className="flex flex-col border-l-4 border-amber-400 pl-4 py-3 bg-amber-50/30 rounded-r-md mt-4">
+                  <label className="text-sm font-bold text-slate-800 mb-2">Especificações Gerais da Contratação</label>
+                  <textarea value={especificacao} onChange={(e) => setEspecificacao(e.target.value)} required rows={3} className="p-3 border border-amber-200 rounded-md outline-none focus:ring-2 focus:ring-amber-500 bg-white" placeholder="Descreva os requisitos gerais (Os itens específicos foram detalhados acima, se houver lote)." />
+                  <button type="button" onClick={buscarRadar} disabled={radarLoading} className="mt-4 bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 rounded-md font-bold transition-colors shadow-sm w-full md:w-auto">
+                    {radarLoading ? 'Analisando Mercado...' : '📊 Gerar Radar de Preços'}
+                  </button>
+                  {radarResultado && (
+                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-md text-sm shadow-inner">
+                      <strong className="block mb-1 text-base">💡 Norte Estratégico:</strong> {radarResultado}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col mt-4">
+                  <label className="text-sm font-semibold mb-1">Requisitos Legais/Garantia</label>
+                  <textarea value={requisitos} onChange={(e) => setRequisitos(e.target.value)} required rows={2} className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
 
-              {/* BLOCO 2: ALTERNATIVAS E TCO */}
+              {/* BLOCO 2: ALTERNATIVAS */}
               <div className="space-y-4 bg-blue-50/50 p-5 rounded-lg border border-blue-100">
                 <h3 className="font-bold text-blue-900 border-b border-blue-200 pb-2">2. Lógica Comparativa (Matriz de Alternativas)</h3>
                 <div className="flex flex-col">
-                  <label className="text-sm font-semibold mb-1 text-slate-700">Cenário 1: Solução Padrão (Ex: Compra)</label>
-                  <input value={alternativa1} onChange={(e) => setAlternativa1(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Descreva a primeira alternativa..." />
+                  <label className="text-sm font-semibold mb-1 text-slate-700">Cenário 1: Solução Padrão</label>
+                  <input value={alternativa1} onChange={(e) => setAlternativa1(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
                 </div>
                 <div className="flex flex-col">
-                  <label className="text-sm font-semibold mb-1 text-slate-700">Cenário 2: Solução Alternativa (Ex: Locação)</label>
-                  <input value={alternativa2} onChange={(e) => setAlternativa2(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Descreva uma alternativa viável..." />
+                  <label className="text-sm font-semibold mb-1 text-slate-700">Cenário 2: Solução Alternativa</label>
+                  <input value={alternativa2} onChange={(e) => setAlternativa2(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
                 </div>
                 
                 <div className="flex flex-col mt-4">
-                  <label className="text-sm font-bold text-blue-800 mb-1">Critério Predominante de Escolha (Desempate)</label>
+                  <label className="text-sm font-bold text-blue-800 mb-1">Critério Predominante de Escolha</label>
                   <select required value={criterioDesempate} onChange={(e) => setCriterioDesempate(e.target.value)} className="p-3 border border-blue-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white font-semibold">
-                    <option value="" disabled>Selecione o critério decisório...</option>
+                    <option value="" disabled>Selecione...</option>
                     <option value="Menor Custo Total de Propriedade (TCO - Econômico)">Econômico (Menor Custo Total - TCO)</option>
                     <option value="Maior Vantagem Técnica e Qualidade (Técnico)">Técnico (Maior Qualidade/Eficiência)</option>
-                    <option value="Padronização e Facilidade de Suporte (Operacional)">Operacional (Padronização de Parque)</option>
+                    <option value="Padronização e Facilidade de Suporte (Operacional)">Operacional (Padronização)</option>
                   </select>
                 </div>
 
                 <div className="flex flex-col mt-4">
-                  <label className="text-sm font-bold text-blue-800 mb-1">Justificativa Detalhada da Solução Escolhida</label>
-                  <textarea value={justificativa} onChange={(e) => setJustificativa(e.target.value)} required rows={3} className="p-3 border border-blue-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Por que o Cenário escolhido é o mais vantajoso?" />
+                  <label className="text-sm font-bold text-blue-800 mb-1">Justificativa da Solução Escolhida</label>
+                  <textarea value={justificativa} onChange={(e) => setJustificativa(e.target.value)} required rows={3} className="p-3 border border-blue-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
                 </div>
               </div>
 
-              {/* BLOCO 3: MATRIZ QUANTIFICADA DE RISCOS (3x3) */}
+              {/* BLOCO 3: MATRIZ QUANTIFICADA DE RISCOS */}
               <div className="space-y-4">
                 <h3 className="font-bold text-slate-800 border-b pb-2">3. Matriz Quantificada de Riscos (3x3)</h3>
                 
@@ -287,7 +324,7 @@ export default function PaginaETP() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div className="flex flex-col">
-                    <label className="text-sm font-semibold mb-1">Probabilidade de Ocorrência</label>
+                    <label className="text-sm font-semibold mb-1">Probabilidade</label>
                     <select required value={probabilidade} onChange={(e) => setProbabilidade(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                       <option value="" disabled>Selecione...</option>
                       <option value="Alta">Alta</option>
@@ -296,7 +333,7 @@ export default function PaginaETP() {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label className="text-sm font-semibold mb-1">Impacto (Dano ao Órgão)</label>
+                    <label className="text-sm font-semibold mb-1">Impacto</label>
                     <select required value={impacto} onChange={(e) => setImpacto(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                       <option value="" disabled>Selecione...</option>
                       <option value="Alto">Alto</option>
@@ -316,7 +353,7 @@ export default function PaginaETP() {
                 <div className="flex flex-col">
                   <label className="text-sm font-semibold mb-1">Ação Preventiva/Mitigação</label>
                   <select required value={mitigacao} onChange={(e) => setMitigacao(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                    <option value="" disabled>Selecione a mitigação...</option>
+                    <option value="" disabled>Selecione...</option>
                     <option value="Realizar ampla e rigorosa pesquisa de preços de mercado">Ampla pesquisa de preços</option>
                     <option value="Estabelecer cronograma de entrega rígido com multas no TR">Cronograma rígido e multas</option>
                     <option value="Exigir amostra ou certificação técnica na fase de aceitação">Exigência de certificação técnica</option>
@@ -345,19 +382,23 @@ export default function PaginaETP() {
 
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 sticky top-6">
-              <h3 className="font-bold text-slate-800 mb-4 border-b pb-2">🛡️ Checklist do Art. 18</h3>
+              <h3 className="font-bold text-slate-800 mb-4 border-b pb-2">🛡️ Checklist do Art. 18 & Art. 40</h3>
               <ul className="space-y-4 text-sm">
                 <li className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${necessidade && especificacao ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{necessidade && especificacao ? '✓' : '1'}</div>
-                  <div className={necessidade && especificacao ? 'text-slate-800' : 'text-slate-500'}><strong>Descrição e Objeto</strong><br/><span className="text-xs">Incluindo especificações.</span></div>
+                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${necessidade ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{necessidade ? '✓' : '1'}</div>
+                  <div className={necessidade ? 'text-slate-800' : 'text-slate-500'}><strong>Descrição e Objeto</strong></div>
                 </li>
                 <li className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${criterioDesempate ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{criterioDesempate ? '✓' : '2'}</div>
-                  <div className={criterioDesempate ? 'text-slate-800' : 'text-slate-500'}><strong>Matriz de Alternativas</strong><br/><span className="text-xs">Cenários e TCO avaliados.</span></div>
+                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isAgrupado ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>{isAgrupado ? '✓' : '2'}</div>
+                  <div className={isAgrupado ? 'text-slate-800' : 'text-slate-500'}><strong>Matriz de Parcelamento</strong><br/><span className="text-xs">Art. 40: Avaliação de Lotes</span></div>
                 </li>
                 <li className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${classificacaoRisco !== 'Não Avaliado' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{classificacaoRisco !== 'Não Avaliado' ? '✓' : '3'}</div>
-                  <div className={classificacaoRisco !== 'Não Avaliado' ? 'text-slate-800' : 'text-slate-500'}><strong>Matriz de Riscos 3x3</strong><br/><span className="text-xs">Probabilidade x Impacto.</span></div>
+                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${criterioDesempate ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{criterioDesempate ? '✓' : '3'}</div>
+                  <div className={criterioDesempate ? 'text-slate-800' : 'text-slate-500'}><strong>Matriz de Alternativas</strong></div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${classificacaoRisco !== 'Não Avaliado' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'}`}>{classificacaoRisco !== 'Não Avaliado' ? '✓' : '4'}</div>
+                  <div className={classificacaoRisco !== 'Não Avaliado' ? 'text-slate-800' : 'text-slate-500'}><strong>Matriz de Riscos 3x3</strong></div>
                 </li>
               </ul>
             </div>
@@ -370,19 +411,12 @@ export default function PaginaETP() {
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
             <h3 className="text-xl font-bold text-slate-900 mb-2">Selo de Hash Absoluto - ETP</h3>
             <p className="text-sm text-slate-600 mb-4 text-justify">
-              O sistema consolidou a sua Matriz de Alternativas (TCO) e a sua Matriz Quantificada de Riscos.
+              O sistema consolidou a sua Matriz de Parcelamento (Art. 40) e a Matriz de Riscos.
             </p>
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
               <label className="flex items-start gap-3 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={termoAceito}
-                  onChange={(e) => setTermoAceito(e.target.checked)}
-                  className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300"
-                />
-                <span className="text-sm font-semibold text-slate-800 text-justify">
-                  Declaro que revisei os cenários inseridos e atesto a viabilidade. Autorizo a gravação das variáveis no Hash de Auditoria e na Nuvem.
-                </span>
+                <input type="checkbox" checked={termoAceito} onChange={(e) => setTermoAceito(e.target.checked)} className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300" />
+                <span className="text-sm font-semibold text-slate-800 text-justify">Declaro que revisei as decisões inseridas e autorizo a gravação do Hash de Auditoria.</span>
               </label>
             </div>
             <div className="flex gap-3 justify-end mt-4">
