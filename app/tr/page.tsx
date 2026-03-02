@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 
 export default function PaginaTR() {
+  const router = useRouter(); // <-- INJEÇÃO DO ROTEADOR PARA REDIRECIONAMENTO AUTOMÁTICO
+  
   const [objeto, setObjeto] = useState('');
   const [especificacao, setEspecificacao] = useState('');
   const [bloqueado, setBloqueado] = useState(false);
@@ -13,7 +16,7 @@ export default function PaginaTR() {
   const [modoPequeno, setModoPequeno] = useState(false);
   const [isTravadoPeloIbge, setIsTravadoPeloIbge] = useState(false);
 
-  // === NOVO: INTELIGÊNCIA DO ART 40 (LOTES) ===
+  // === INTELIGÊNCIA DO ART 40 (LOTES) ===
   const [isAgrupado, setIsAgrupado] = useState(false);
   const [itensLote, setItensLote] = useState<any[]>([]);
 
@@ -109,7 +112,6 @@ export default function PaginaTR() {
       obrigacoes_contratada: obrigacoes || 'Não informadas',
       modelo_execucao_gestao: modeloGestao || 'Não selecionado',
       sancoes_aplicaveis: sancoes || 'Não selecionadas',
-      // INJEÇÃO DA CAMADA DE GOVERNANÇA ART 40 PARA O BACKEND
       is_agrupado: isAgrupado,
       itens_lote: isAgrupado ? itensLote : []
     };
@@ -130,6 +132,11 @@ export default function PaginaTR() {
           dados_completos: { fase_atual: 'TR_CONCLUIDO', payload_tr: payload },
           hash_auditoria: data.hash
         });
+
+        // ==== O REDIRECIONAMENTO AUTOMÁTICO CORRIGIDO ====
+        setTimeout(() => {
+          router.push('/processos');
+        }, 2000);
       }
     } catch (err: any) {
       setErro(err.toString());
@@ -185,10 +192,12 @@ export default function PaginaTR() {
           </button>
         </div>
 
+        {/* NAVEGAÇÃO CORRIGIDA COM A ABA 4 (PNCP) */}
         <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
           <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
           <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. ETP</Link>
           <span className="text-green-800 font-bold bg-green-50 border border-green-200 px-3 py-1.5 rounded-md shadow-sm">3. TR</span>
+          <Link href="/pncp" className="text-slate-600 hover:text-purple-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. PNCP (Pesquisa de Preços) →</Link>
           <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
         
@@ -215,7 +224,6 @@ export default function PaginaTR() {
               <textarea value={especificacao} readOnly rows={4} className="p-3 border border-green-200 rounded-md outline-none bg-slate-100 font-medium leading-relaxed text-slate-600 cursor-not-allowed" />
             </div>
 
-            {/* AQUI A MÁGICA DO ART 40 ACONTECE */}
             {isAgrupado && itensLote.length > 0 && (
               <div className="p-5 border border-blue-200 bg-blue-50/30 rounded-lg shadow-inner">
                 <div className="flex items-center gap-2 mb-3">
@@ -278,12 +286,17 @@ export default function PaginaTR() {
         {erro && (<div className="mt-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm whitespace-pre-wrap shadow-sm"><strong>Erro:</strong> {erro}</div>)}
 
         {resultado && (
-          <div className="mt-10 p-8 bg-green-50 rounded-xl border border-green-200 shadow-sm">
+          <div className="mt-10 p-8 bg-green-50 rounded-xl border border-green-200 shadow-sm animate-fadeIn">
             <div className="flex justify-between items-center mb-6 border-b border-green-200 pb-4">
               <h2 className="text-xl font-bold text-green-900">Termo de Referência Consolidado</h2>
-              <button type="button" onClick={exportarParaWord} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors flex items-center gap-2">
-                📄 Exportar Word
-              </button>
+              <div className="flex gap-4">
+                <button type="button" onClick={exportarParaWord} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors flex items-center gap-2">
+                  📄 Exportar Word
+                </button>
+                <button type="button" onClick={() => router.push('/pncp')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors flex items-center gap-2">
+                  Avançar para Etapa 4 (PNCP) ➡️
+                </button>
+              </div>
             </div>
             <div className="bg-white p-8 rounded-lg shadow-sm whitespace-pre-wrap text-sm leading-relaxed border border-green-100 text-justify font-serif">
               {resultado.texto_oficial}
