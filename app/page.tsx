@@ -4,13 +4,97 @@ import { useState, useEffect } from 'react';
 import { licitacaoService } from '../services/licitacaoService';
 import Link from 'next/link';
 
+// ============================================================================
+// COMPONENTE: CALCULADORA PARAMÉTRICA DO DFD (Obrigatório TCU - Eixo 1)
+// ============================================================================
+function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number, memoria: string) => void }) {
+  const [consumoMensal, setConsumoMensal] = useState('');
+  const [meses, setMeses] = useState<number>(12);
+  const [margem, setMargem] = useState<number>(10);
+  const [quantidadeTotal, setQuantidadeTotal] = useState<number>(0);
+
+  useEffect(() => {
+    const base = Number(consumoMensal) || 0;
+    const periodo = Number(meses) || 0;
+    const margemSeguranca = Number(margem) || 0;
+    
+    // Fórmula Matemática: (Consumo * Meses) + Margem%
+    const calculo = (base * periodo) * (1 + (margemSeguranca / 100));
+    const totalArredondado = Math.ceil(calculo);
+    
+    setQuantidadeTotal(totalArredondado);
+
+    // Texto de Blindagem Material que substituirá a justificativa genérica
+    const memoriaDeCalculo = `MEMÓRIA DE CÁLCULO PARAMÉTRICA (ART. 18, LEI 14.133): Consumo histórico aferido de ${base} und/mês, projetado para o período contratual de ${periodo} meses, acrescido de margem de segurança técnica de ${margemSeguranca}% para mitigação de risco de desabastecimento. Quantidade exata e matematicamente fundamentada: ${totalArredondado} unidades.`;
+
+    if (base > 0) {
+      onCalculoCompleto(totalArredondado, memoriaDeCalculo);
+    } else {
+      onCalculoCompleto(0, '');
+    }
+  }, [consumoMensal, meses, margem]);
+
+  return (
+    <div className="p-5 border border-blue-200 rounded-md bg-slate-100 col-span-1 md:col-span-2 shadow-inner">
+      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+        🧮 Memória de Cálculo Paramétrica (Exigência Tribunal de Contas)
+      </h3>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Consumo Médio (Mensal)</label>
+          <input 
+            type="number" 
+            className="w-full p-3 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white"
+            value={consumoMensal}
+            onChange={(e) => setConsumoMensal(e.target.value)}
+            placeholder="Ex: 50"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Meses de Cobertura</label>
+          <input 
+            type="number" 
+            className="w-full p-3 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white"
+            value={meses}
+            onChange={(e) => setMeses(Number(e.target.value))}
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Margem Técnica (%)</label>
+          <input 
+            type="number" 
+            className="w-full p-3 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white"
+            value={margem}
+            onChange={(e) => setMargem(Number(e.target.value))}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 p-4 bg-blue-600 text-white rounded-md flex justify-between items-center shadow-sm">
+        <span className="font-bold">Quantidade Institucional Projetada:</span>
+        <span className="text-2xl font-black tracking-tight">{quantidadeTotal} und</span>
+      </div>
+      <p className="text-xs text-slate-500 mt-3 font-medium">
+        *A parametrização matemática afasta o risco de nulidade por estimativa arbitrária e atende à jurisprudência do TCU.
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
+// MAIN PAGE
+// ============================================================================
 export default function Home() {
   // === ESTADOS DO SETUP INSTITUCIONAL (IBGE) ===
   const [cidadeInput, setCidadeInput] = useState('');
   const [loadIbge, setLoadIbge] = useState(false);
   const [orgaoConfigurado, setOrgaoConfigurado] = useState<any>(null);
 
-  // === ESTADOS DO DFD (Intactos do Sprint 4) ===
+  // === ESTADOS DO DFD ===
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -21,6 +105,9 @@ export default function Home() {
   const [numeroPca, setNumeroPca] = useState('');
   const [justificativaPca, setJustificativaPca] = useState('');
   
+  // === ESTADOS DA CALCULADORA E MODAL ===
+  const [quantidadeParametrizada, setQuantidadeParametrizada] = useState<number>(0);
+  const [memoriaDeCalculoText, setMemoriaDeCalculoText] = useState<string>('');
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
   const [dadosFormulario, setDadosFormulario] = useState<FormData | null>(null);
@@ -53,6 +140,13 @@ export default function Home() {
 
   const prepararEnvio = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Trava de segurança: Se não preencheu a calculadora, bloqueia.
+    if (quantidadeParametrizada === 0) {
+      alert("Atenção: É obrigatório preencher a Memória de Cálculo Paramétrica.");
+      return;
+    }
+
     setDadosFormulario(new FormData(e.currentTarget));
     setModalAberto(true);
   };
@@ -64,11 +158,12 @@ export default function Home() {
     setLoading(true);
     setErro(null);
 
+    // O payload une os dados do formulário e o texto gerado pela calculadora secreta
     const payload = {
       setor_requisitante: (dadosFormulario.get('setor') || '').toString(),
       objeto_da_compra: (dadosFormulario.get('objeto') || '').toString(),
-      quantidade_estimada: Number(dadosFormulario.get('quantidade')) || 1,
-      origem_necessidade: origem || 'Não selecionada',
+      quantidade_estimada: quantidadeParametrizada, // Vem da Calculadora Matemática
+      origem_necessidade: `${origem}. ${memoriaDeCalculoText}`, // Funde o motivo com a memória de cálculo
       impacto_institucional: impacto || 'Não selecionado',
       previsao_pca: pca,
       numero_pca: pca === 'Sim' ? numeroPca : '',
@@ -76,13 +171,9 @@ export default function Home() {
     };
 
     try {
-      // 1. Gera o Documento e o Hash (Lógica Original Intacta)
       const data = await licitacaoService.gerarDFD(payload);
       setResultado(data);
 
-      // ==========================================================
-      // INJEÇÃO V3.0: PERSISTÊNCIA SILENCIOSA NO BANCO DE DADOS
-      // ==========================================================
       let processId = localStorage.getItem('licitacao_id_processo');
       if (!processId) {
         processId = `PROC-${Date.now()}`;
@@ -98,7 +189,6 @@ export default function Home() {
         dados_completos: { fase_atual: 'DFD_CONCLUIDO', payload_dfd: payload },
         hash_auditoria: data.hash
       });
-      // ==========================================================
 
     } catch (err: any) {
       setErro(err.toString());
@@ -165,7 +255,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* === DFD INTEGRAL RESTAURADO === */}
+        {/* === DFD INTEGRAL RESTAURADO E BLINDADO === */}
         <div className={`bg-white rounded-lg shadow-xl p-8 border border-slate-200 transition-opacity duration-500 ${!orgaoConfigurado ? 'opacity-50 pointer-events-none grayscale-[30%]' : 'opacity-100'}`}>
           <div className="mb-6 bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono text-center tracking-wider">
             MÓDULO DE GOVERNANÇA E COMPLIANCE - LEI 14.133/2021
@@ -186,22 +276,26 @@ export default function Home() {
           
           <form onSubmit={prepararEnvio} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="flex flex-col">
+              <div className="flex flex-col md:col-span-2">
                 <label className="text-sm font-semibold mb-1">Setor Requisitante</label>
                 <input name="setor" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Secretaria de Saúde" />
               </div>
-              <div className="flex flex-col">
-                <label className="text-sm font-semibold mb-1">Quantidade Estimada</label>
-                <input name="quantidade" type="number" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" />
+              
+              <div className="flex flex-col md:col-span-2">
+                <label className="text-sm font-semibold mb-1">Objeto da Demanda</label>
+                <input name="objeto" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de Veículos Utilitários" />
               </div>
+
+              {/* INJEÇÃO DO NOVO MOTOR MATEMÁTICO (EIXO 1) AQUI */}
+              <CalculadoraDFD 
+                onCalculoCompleto={(qtd, memoria) => {
+                  setQuantidadeParametrizada(qtd);
+                  setMemoriaDeCalculoText(memoria);
+                }} 
+              />
             </div>
 
-            <div className="flex flex-col">
-              <label className="text-sm font-semibold mb-1">Objeto da Demanda</label>
-              <input name="objeto" required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de Veículos Utilitários" />
-            </div>
-
-            <div className="flex flex-col p-5 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex flex-col p-5 bg-blue-50 border border-blue-200 rounded-md mt-6">
               <label className="text-sm font-bold text-slate-800 mb-3">Origem Técnica da Necessidade</label>
               <select required value={origem} onChange={(e) => setOrigem(e.target.value)} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                 <option value="" disabled>Selecione o motivo fático...</option>
@@ -221,6 +315,7 @@ export default function Home() {
               </select>
             </div>
 
+            {/* O RESTANTE DO CÓDIGO DO PCA E BOTÕES SEGUE INTACTO ABAIXO */}
             <div className="flex flex-col p-5 bg-slate-50 border border-slate-300 rounded-md">
               <label className="text-sm font-bold text-slate-800 mb-2">A Contratação está prevista no PCA (Plano de Contratações Anual)?</label>
               <div className="flex gap-4 mb-4">
@@ -248,7 +343,7 @@ export default function Home() {
             </div>
 
             <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white font-bold py-4 rounded-md hover:bg-slate-800 disabled:bg-slate-400 transition-all shadow-md">
-              {loading ? 'Gerando Hash e Salvando na Nuvem...' : 'Gerar DFD Auditável'}
+              {loading ? 'Processando Lógica Institucional...' : 'Gerar DFD Auditável'}
             </button>
           </form>
 
@@ -257,12 +352,12 @@ export default function Home() {
           {resultado && (
             <div className="mt-10 p-6 bg-slate-50 rounded-md border border-slate-300">
               <div className="flex justify-between items-center mb-4 border-b border-slate-300 pb-4">
-                <h2 className="text-lg font-bold">DFD Estruturado e Blindado</h2>
+                <h2 className="text-lg font-bold text-green-800">✅ DFD Gerado com Blindagem Institucional</h2>
                 <button onClick={exportarParaWord} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded shadow flex items-center gap-2 transition-colors">
-                  📄 Exportar Documento Legal
+                  📄 Exportar para Word
                 </button>
               </div>
-              <div className="bg-white p-6 rounded shadow-sm whitespace-pre-wrap text-sm leading-relaxed border border-slate-200 font-serif">
+              <div className="bg-white p-6 rounded shadow-sm whitespace-pre-wrap text-sm leading-relaxed border border-slate-200 font-serif text-justify">
                 {resultado.texto_oficial}
               </div>
             </div>
@@ -273,8 +368,8 @@ export default function Home() {
       {modalAberto && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Assinatura de Hash Absoluto</h3>
-            <p className="text-sm text-slate-600 mb-4 text-justify">O Hash gerado a partir deste momento vinculará <strong>todas as variáveis inseridas no formulário</strong>, salvando-as de forma segura na nuvem governamental.</p>
+            <h3 className="text-xl font-bold text-slate-900 mb-2">Assinatura de Responsabilidade</h3>
+            <p className="text-sm text-slate-600 mb-4 text-justify">O processamento a seguir gravará as premissas matemáticas e fáticas na infraestrutura de nuvem com Hash imutável.</p>
             
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
               <label className="flex items-start gap-3 cursor-pointer">
@@ -285,7 +380,7 @@ export default function Home() {
                   className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300" 
                 />
                 <span className="text-sm font-semibold text-slate-800 text-justify">
-                  Declaro sob as penas da lei a veracidade dos dados (Art. 11) e autorizo a geração do Hash de Governança.
+                  Declaro sob as penas da lei a veracidade das variáveis inseridas e autorizo a geração da Trilha Criptográfica.
                 </span>
               </label>
             </div>
