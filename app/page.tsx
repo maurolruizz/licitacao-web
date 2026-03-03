@@ -5,7 +5,7 @@ import { licitacaoService } from '../services/licitacaoService';
 import Link from 'next/link';
 
 // ============================================================================
-// COMPONENTE: CALCULADORA PARAMÉTRICA DO DFD (Obrigatório TCU - Eixo 1)
+// COMPONENTE: CALCULADORA PARAMÉTRICA DO DFD (V5.2 - Trava Antifraude)
 // ============================================================================
 function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number, memoria: string) => void }) {
   const [consumoMensal, setConsumoMensal] = useState('');
@@ -24,8 +24,10 @@ function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number
     
     setQuantidadeTotal(totalArredondado);
 
-    // Texto de Blindagem Material que substituirá a justificativa genérica
-    const memoriaDeCalculo = `MEMÓRIA DE CÁLCULO PARAMÉTRICA (ART. 18, LEI 14.133): Consumo histórico aferido de ${base} und/mês, projetado para o período contratual de ${periodo} meses, acrescido de margem de segurança técnica de ${margemSeguranca}% para mitigação de risco de desabastecimento. Quantidade exata e matematicamente fundamentada: ${totalArredondado} unidades.`;
+    // INJEÇÃO V5.2: Adiciona o alerta textual no documento se a margem for alta
+    const alertaMargem = margemSeguranca > 20 ? " [ALERTA DE RISCO: Margem superior a 20% exige estudo técnico apartado para afastar risco de superestimativa conforme jurisprudência do TCU]." : "";
+    
+    const memoriaDeCalculo = `MEMÓRIA DE CÁLCULO PARAMÉTRICA (ART. 18, LEI 14.133): Consumo histórico aferido de ${base} und/mês, projetado para o período contratual de ${periodo} meses, acrescido de margem de segurança técnica de ${margemSeguranca}% para mitigação de risco de desabastecimento.${alertaMargem} Quantidade exata e matematicamente fundamentada: ${totalArredondado} unidades.`;
 
     if (base > 0) {
       onCalculoCompleto(totalArredondado, memoriaDeCalculo);
@@ -40,7 +42,7 @@ function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number
         🧮 Memória de Cálculo Paramétrica (Exigência Tribunal de Contas)
       </h3>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
         <div>
           <label className="block text-sm font-semibold text-slate-700 mb-1">Consumo Médio (Mensal)</label>
           <input 
@@ -66,13 +68,21 @@ function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number
           <label className="block text-sm font-semibold text-slate-700 mb-1">Margem Técnica (%)</label>
           <input 
             type="number" 
-            className="w-full p-3 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 bg-white"
+            // INJEÇÃO V5.2: Borda vermelha se o usuário for ganancioso
+            className={`w-full p-3 border rounded focus:ring-2 focus:ring-blue-500 bg-white ${margem > 20 ? 'border-red-500 text-red-700' : 'border-slate-300'}`}
             value={margem}
             onChange={(e) => setMargem(Number(e.target.value))}
             required
           />
         </div>
       </div>
+
+      {/* INJEÇÃO V5.2: TRAVA ANTIFRAUDE E ALERTA TCU VISUAL */}
+      {margem > 20 && (
+        <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-bold rounded shadow-sm">
+          ⚠️ ALERTA DE GOVERNANÇA: Margem superior a 20% detectada. Risco de superestimativa (Jurisprudência TCU). O sistema exigirá anuência formal da autoridade.
+        </div>
+      )}
 
       <div className="mt-4 p-4 bg-blue-600 text-white rounded-md flex justify-between items-center shadow-sm">
         <span className="font-bold">Quantidade Institucional Projetada:</span>
@@ -86,7 +96,7 @@ function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number
 }
 
 // ============================================================================
-// MAIN PAGE
+// MAIN PAGE (INTACTA - Regressão Zero)
 // ============================================================================
 export default function Home() {
   // === ESTADOS DO SETUP INSTITUCIONAL (IBGE) ===

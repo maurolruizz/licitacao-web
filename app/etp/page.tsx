@@ -35,7 +35,8 @@ export default function PaginaETP() {
   const [itensLote, setItensLote] = useState([{ nome: '', quantidade: 1, especificacao: '' }]);
   
   // Novos estados para o Simulador Transparente de TCO
-  const [custoGestaoPorContrato, setCustoGestaoPorContrato] = useState<number>(600);
+  // INJEÇÃO V5.2: O custo passa a ser uma constante fixa para não ser manipulável
+  const custoGestaoPorContrato = 600; 
   const [mesesContrato, setMesesContrato] = useState<number>(12);
 
   const adicionarItemLote = () => setItensLote([...itensLote, { nome: '', quantidade: 1, especificacao: '' }]);
@@ -252,7 +253,7 @@ export default function PaginaETP() {
                   <input value={objeto} onChange={(e) => setObjeto(e.target.value)} required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de materiais de expediente" />
                 </div>
                 
-                {/* INJEÇÃO: MÓDULO ART 40 COM SIMULADOR TCO TRANSPARENTE */}
+                {/* INJEÇÃO: MÓDULO ART 40 COM SIMULADOR TCO TRANSPARENTE E BLINDADO */}
                 <div className="mt-6 p-5 border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -272,17 +273,21 @@ export default function PaginaETP() {
                         <textarea required={isAgrupado} value={justificativaAgrupamento} onChange={(e) => setJustificativaAgrupamento(e.target.value)} rows={2} className="p-3 border border-blue-200 rounded-md outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white" placeholder="Explique resumidamente a padronização ou interdependência técnica..." />
                       </div>
 
-                      {/* A MÁQUINA MATEMÁTICA VISÍVEL */}
+                      {/* INJEÇÃO V5.2: A MÁQUINA MATEMÁTICA VISÍVEL COM PARÂMETRO CONGELADO */}
                       <div className="bg-white p-4 rounded border border-blue-300 shadow-inner">
                          <h5 className="text-xs font-bold text-blue-900 mb-3 block">🧮 Simulador Analítico de TCO (Justificativa Econômica)</h5>
                          <div className="grid grid-cols-2 gap-4 mb-4">
                             <div>
-                                <label className="text-xs text-slate-600 block mb-1">Custo Médio Gestão/Contrato (R$)</label>
-                                <input type="number" value={custoGestaoPorContrato} onChange={(e) => setCustoGestaoPorContrato(Number(e.target.value))} className="w-full p-2 border rounded text-sm outline-none focus:border-blue-500 bg-slate-50" />
+                                <label className="text-xs font-bold text-slate-700 block mb-1">Custo Médio Gestão/Contrato</label>
+                                <div className="relative">
+                                    <input type="number" value={custoGestaoPorContrato} readOnly className="w-full p-2 pl-8 border rounded text-sm outline-none bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300" />
+                                    <span className="absolute left-2 top-2 text-slate-500 text-sm font-bold">R$</span>
+                                </div>
+                                <span className="text-[10px] text-red-600 font-bold block mt-1">🔒 Parâmetro Fixo (Auditoria TCU)</span>
                             </div>
                             <div>
-                                <label className="text-xs text-slate-600 block mb-1">Prazo de Vigência (Meses)</label>
-                                <input type="number" value={mesesContrato} onChange={(e) => setMesesContrato(Number(e.target.value))} className="w-full p-2 border rounded text-sm outline-none focus:border-blue-500 bg-slate-50" />
+                                <label className="text-xs text-slate-700 font-bold block mb-1">Prazo de Vigência (Meses)</label>
+                                <input type="number" value={mesesContrato} onChange={(e) => setMesesContrato(Number(e.target.value))} className="w-full p-2 border rounded text-sm outline-none focus:border-blue-500 bg-white border-blue-200" min="1" />
                             </div>
                          </div>
                          
