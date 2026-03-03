@@ -29,10 +29,14 @@ export default function PaginaETP() {
   const [modalAberto, setModalAberto] = useState(false);
   const [termoAceito, setTermoAceito] = useState(false);
 
-  // === NOVO MÓDULO: ART 40 (PARCELAMENTO / LOTE) ===
+  // === MÓDULO: ART 40 (PARCELAMENTO / LOTE) E SIMULADOR TCO ===
   const [isAgrupado, setIsAgrupado] = useState(false);
   const [justificativaAgrupamento, setJustificativaAgrupamento] = useState('');
   const [itensLote, setItensLote] = useState([{ nome: '', quantidade: 1, especificacao: '' }]);
+  
+  // Novos estados para o Simulador Transparente de TCO
+  const [custoGestaoPorContrato, setCustoGestaoPorContrato] = useState<number>(600);
+  const [mesesContrato, setMesesContrato] = useState<number>(12);
 
   const adicionarItemLote = () => setItensLote([...itensLote, { nome: '', quantidade: 1, especificacao: '' }]);
   
@@ -47,6 +51,27 @@ export default function PaginaETP() {
       setItensLote(itensLote.filter((_, i) => i !== index));
     }
   };
+
+  // Motor Matemático do TCO (Calculado em tempo real na tela)
+  const simuladorTCO = useMemo(() => {
+    if (!isAgrupado || itensLote.length <= 1) return null;
+    
+    const numItens = itensLote.length;
+    
+    // Cenário A: Parcelado (1 contrato por item)
+    const custoGestaoParcelado = numItens * custoGestaoPorContrato * mesesContrato;
+    const custoFreteParcelado = numItens * 250; // Frete base descentralizado
+    const tcoParcelado = custoGestaoParcelado + custoFreteParcelado;
+
+    // Cenário B: Agrupado em Lote (1 contrato único)
+    const custoGestaoAgrupado = 1 * custoGestaoPorContrato * mesesContrato;
+    const custoFreteAgrupado = 350; // Frete consolidado
+    const tcoAgrupado = custoGestaoAgrupado + custoFreteAgrupado;
+
+    const economiaPercentual = Math.round(((tcoParcelado - tcoAgrupado) / tcoParcelado) * 100);
+
+    return { tcoParcelado, tcoAgrupado, economiaPercentual };
+  }, [isAgrupado, itensLote, custoGestaoPorContrato, mesesContrato]);
 
   // === MOTOR: ORÁCULO DO TCU ===
   const alertaJurisprudencia = useMemo(() => {
@@ -97,6 +122,10 @@ export default function PaginaETP() {
 
   const prepararEnvio = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isAgrupado && itensLote.length <= 1) {
+      alert("Para agrupar em lote, adicione ao menos 2 itens.");
+      return;
+    }
     setModalAberto(true);
   };
 
@@ -109,11 +138,18 @@ export default function PaginaETP() {
     localStorage.setItem('licitacao_objeto', objeto);
     localStorage.setItem('licitacao_especificacao', especificacao);
     localStorage.setItem('licitacao_is_agrupado', JSON.stringify(isAgrupado));
+    localStorage.setItem('licitacao_risco', risco); // V5.0: Salva o risco para sugerir sanções no TR
     if (isAgrupado) {
       localStorage.setItem('licitacao_itens_lote', JSON.stringify(itensLote));
     }
 
     const necessidadeEnriquecida = `${necessidade}\n\nEspecificações Preliminares: ${especificacao}\nRequisitos: ${requisitos}`;
+    
+    // Injeção da matemática transparente na justificativa
+    let justificativaCompleta = justificativaAgrupamento;
+    if (isAgrupado && simuladorTCO) {
+        justificativaCompleta += `\n\nSIMULAÇÃO TCO (TRANSPARÊNCIA E AUDITABILIDADE):\nCusto base de gestão estimado: R$ ${custoGestaoPorContrato}/mês por contrato durante ${mesesContrato} meses.\nCenário A (Fracionado em ${itensLote.length} contratos): TCO Projetado de R$ ${simuladorTCO.tcoParcelado.toLocaleString('pt-BR')}\nCenário B (Agrupado em Lote Único): TCO Projetado de R$ ${simuladorTCO.tcoAgrupado.toLocaleString('pt-BR')}\nConclusão Transparente: A análise paramétrica indica redução de ${simuladorTCO.economiaPercentual}% no custo indireto de propriedade.`;
+    }
 
     const payload = {
       objeto_da_compra: objeto || 'Não informado',
@@ -127,9 +163,8 @@ export default function PaginaETP() {
       probabilidade: probabilidade || 'Não avaliada',
       impacto: impacto || 'Não avaliado',
       classificacao_risco: classificacaoRisco,
-      // INJEÇÃO DA CAMADA DE GOVERNANÇA ART 40
       is_agrupado: isAgrupado,
-      justificativa_agrupamento: justificativaAgrupamento,
+      justificativa_agrupamento: justificativaCompleta, // Substituída para enviar a matemática pro backend
       itens_lote: isAgrupado ? itensLote : []
     };
 
@@ -217,7 +252,7 @@ export default function PaginaETP() {
                   <input value={objeto} onChange={(e) => setObjeto(e.target.value)} required className="p-3 border rounded-md outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Aquisição de materiais de expediente" />
                 </div>
                 
-                {/* INJEÇÃO: MÓDULO ART 40 (TOGGLE) */}
+                {/* INJEÇÃO: MÓDULO ART 40 COM SIMULADOR TCO TRANSPARENTE */}
                 <div className="mt-6 p-5 border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <div>
@@ -233,11 +268,39 @@ export default function PaginaETP() {
                   {isAgrupado && (
                     <div className="space-y-4 border-t border-blue-200 pt-4 animate-fadeIn">
                       <div className="flex flex-col">
-                        <label className="text-xs font-bold text-blue-800 mb-1">Justificativa Técnica de Agrupamento (Economia de Escala e Interdependência)</label>
-                        <textarea required={isAgrupado} value={justificativaAgrupamento} onChange={(e) => setJustificativaAgrupamento(e.target.value)} rows={3} className="p-3 border border-blue-200 rounded-md outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white" placeholder="Justifique por que o parcelamento inviabilizaria a contratação ou geraria prejuízo à economia de escala..." />
+                        <label className="text-xs font-bold text-blue-800 mb-1">Justificativa Narrativa (Complementar)</label>
+                        <textarea required={isAgrupado} value={justificativaAgrupamento} onChange={(e) => setJustificativaAgrupamento(e.target.value)} rows={2} className="p-3 border border-blue-200 rounded-md outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white" placeholder="Explique resumidamente a padronização ou interdependência técnica..." />
+                      </div>
+
+                      {/* A MÁQUINA MATEMÁTICA VISÍVEL */}
+                      <div className="bg-white p-4 rounded border border-blue-300 shadow-inner">
+                         <h5 className="text-xs font-bold text-blue-900 mb-3 block">🧮 Simulador Analítico de TCO (Justificativa Econômica)</h5>
+                         <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="text-xs text-slate-600 block mb-1">Custo Médio Gestão/Contrato (R$)</label>
+                                <input type="number" value={custoGestaoPorContrato} onChange={(e) => setCustoGestaoPorContrato(Number(e.target.value))} className="w-full p-2 border rounded text-sm outline-none focus:border-blue-500 bg-slate-50" />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-600 block mb-1">Prazo de Vigência (Meses)</label>
+                                <input type="number" value={mesesContrato} onChange={(e) => setMesesContrato(Number(e.target.value))} className="w-full p-2 border rounded text-sm outline-none focus:border-blue-500 bg-slate-50" />
+                            </div>
+                         </div>
+                         
+                         {simuladorTCO ? (
+                             <div className="bg-slate-900 p-3 rounded-md text-white">
+                                <p className="text-xs text-slate-300 mb-1">Cenário A (Fracionado): <span className="text-red-400 font-mono">R$ {simuladorTCO.tcoParcelado.toLocaleString('pt-BR')}</span></p>
+                                <p className="text-xs text-slate-300 mb-2">Cenário B (Agrupado): <span className="text-green-400 font-mono font-bold">R$ {simuladorTCO.tcoAgrupado.toLocaleString('pt-BR')}</span></p>
+                                <div className="border-t border-slate-700 pt-2 flex justify-between items-center">
+                                    <span className="text-xs font-bold uppercase tracking-wider">Economia Estimada (TCO):</span>
+                                    <span className="text-lg font-black text-green-400">{simuladorTCO.economiaPercentual}%</span>
+                                </div>
+                             </div>
+                         ) : (
+                             <p className="text-xs text-orange-600 bg-orange-50 p-2 rounded">⚠️ Adicione ao menos 2 itens abaixo para ativar a simulação econômica.</p>
+                         )}
                       </div>
                       
-                      <div className="bg-white p-4 rounded border border-slate-200">
+                      <div className="bg-white p-4 rounded border border-slate-200 mt-2">
                         <label className="text-xs font-bold text-slate-800 mb-3 block">Relação de Itens do Lote</label>
                         {itensLote.map((item, index) => (
                           <div key={index} className="flex gap-2 mb-3 items-start">
@@ -411,12 +474,12 @@ export default function PaginaETP() {
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-blue-600">
             <h3 className="text-xl font-bold text-slate-900 mb-2">Selo de Hash Absoluto - ETP</h3>
             <p className="text-sm text-slate-600 mb-4 text-justify">
-              O sistema consolidou a sua Matriz de Parcelamento (Art. 40) e a Matriz de Riscos.
+              O sistema consolidou a sua Matriz de Parcelamento (Art. 40) e a Matriz de Riscos. A simulação econômica de TCO será anexada ao processo oficial.
             </p>
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" checked={termoAceito} onChange={(e) => setTermoAceito(e.target.checked)} className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300" />
-                <span className="text-sm font-semibold text-slate-800 text-justify">Declaro que revisei as decisões inseridas e autorizo a gravação do Hash de Auditoria.</span>
+                <span className="text-sm font-semibold text-slate-800 text-justify">Declaro que a presente decisão de parcelamento/agrupamento é pautada na discricionariedade técnica e autorizo a gravação do Hash.</span>
               </label>
             </div>
             <div className="flex gap-3 justify-end mt-4">
