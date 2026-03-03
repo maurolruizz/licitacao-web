@@ -6,7 +6,7 @@ import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 
 export default function PaginaTR() {
-  const router = useRouter(); // <-- INJEÇÃO DO ROTEADOR PARA REDIRECIONAMENTO AUTOMÁTICO
+  const router = useRouter(); 
   
   const [objeto, setObjeto] = useState('');
   const [especificacao, setEspecificacao] = useState('');
@@ -20,16 +20,24 @@ export default function PaginaTR() {
   const [isAgrupado, setIsAgrupado] = useState(false);
   const [itensLote, setItensLote] = useState<any[]>([]);
 
+  // === INJEÇÃO V5.1: INTELIGÊNCIA DE RISCO (ETP -> TR) ===
+  const [riscoMapeadoETP, setRiscoMapeadoETP] = useState<string>('Não mapeado');
+
   useEffect(() => {
     // Leitura da Memória do ETP
     const objetoSalvo = localStorage.getItem('licitacao_objeto');
     const especificacaoSalva = localStorage.getItem('licitacao_especificacao');
     const isAgrupadoSalvo = localStorage.getItem('licitacao_is_agrupado');
     const itensLoteSalvo = localStorage.getItem('licitacao_itens_lote');
+    const riscoSalvo = localStorage.getItem('licitacao_risco'); // Captura o risco do ETP
     
     if (objetoSalvo && especificacaoSalva) {
       setObjeto(objetoSalvo);
       setEspecificacao(especificacaoSalva);
+      
+      if (riscoSalvo) {
+         setRiscoMapeadoETP(riscoSalvo);
+      }
       
       // Carrega os Lotes se existirem
       if (isAgrupadoSalvo === 'true' && itensLoteSalvo) {
@@ -90,6 +98,7 @@ export default function PaginaTR() {
     localStorage.removeItem('licitacao_especificacao');
     localStorage.removeItem('licitacao_is_agrupado');
     localStorage.removeItem('licitacao_itens_lote');
+    localStorage.removeItem('licitacao_risco');
     window.location.reload();
   };
 
@@ -113,7 +122,8 @@ export default function PaginaTR() {
       modelo_execucao_gestao: modeloGestao || 'Não selecionado',
       sancoes_aplicaveis: sancoes || 'Não selecionadas',
       is_agrupado: isAgrupado,
-      itens_lote: isAgrupado ? itensLote : []
+      itens_lote: isAgrupado ? itensLote : [],
+      risco_mapeado: riscoMapeadoETP // V5.1: Envia o risco cruzado para o motor sugerir a Sanção correta
     };
 
     try {
@@ -133,7 +143,6 @@ export default function PaginaTR() {
           hash_auditoria: data.hash
         });
 
-        // ==== O REDIRECIONAMENTO AUTOMÁTICO CORRIGIDO ====
         setTimeout(() => {
           router.push('/processos');
         }, 2000);
@@ -192,7 +201,6 @@ export default function PaginaTR() {
           </button>
         </div>
 
-        {/* NAVEGAÇÃO CORRIGIDA COM A ABA 4 (PNCP) */}
         <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
           <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
           <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. ETP</Link>
@@ -222,6 +230,11 @@ export default function PaginaTR() {
             <div className="flex flex-col border-l-4 border-green-500 pl-4 py-2 bg-green-50/50 rounded-r-md">
               <label className="text-sm font-semibold mb-1 flex items-center gap-2 text-green-900">Especificações Gerais (Blindado pelo ETP)</label>
               <textarea value={especificacao} readOnly rows={4} className="p-3 border border-green-200 rounded-md outline-none bg-slate-100 font-medium leading-relaxed text-slate-600 cursor-not-allowed" />
+              {/* INJEÇÃO V5.1: AVISO DE COMPLIANCE NORMATIVO DA IA */}
+              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800 flex items-start gap-2">
+                <span className="font-bold">⚠️ Inteligência Normativa:</span> 
+                O sistema injetará automaticamente as normas técnicas (Ex: ABNT, NR, ANVISA) correspondentes no documento final. A validação técnica destas continua sendo sua responsabilidade.
+              </div>
             </div>
 
             {isAgrupado && itensLote.length > 0 && (
@@ -268,8 +281,13 @@ export default function PaginaTR() {
               <label className="text-sm font-bold text-slate-800 mb-2">Modelo de Gestão e Fiscalização</label>
               <textarea required value={modeloGestao} onChange={(e) => setModeloGestao(e.target.value)} rows={3} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500 bg-white text-sm" placeholder="Descreva o modelo de fiscalização..." />
 
-              <label className="text-sm font-bold text-slate-800 mt-4 mb-2">Sanções Administrativas</label>
-              <textarea required value={sancoes} onChange={(e) => setSancoes(e.target.value)} rows={2} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500 bg-white text-sm" placeholder="Descreva as sanções..." />
+              {/* INJEÇÃO V5.1: ALERTA DE SANÇÕES PARAMETRIZADAS PELO ETP */}
+              <label className="text-sm font-bold text-slate-800 mt-4 mb-2 flex items-center justify-between">
+                Sanções Administrativas 
+                <span className={`text-[10px] px-2 py-0.5 rounded text-white ${riscoMapeadoETP.includes('deserta') || riscoMapeadoETP.includes('atraso') ? 'bg-orange-500' : 'bg-slate-500'}`}>Risco ETP: {riscoMapeadoETP.split(' ')[0]}</span>
+              </label>
+              <textarea required value={sancoes} onChange={(e) => setSancoes(e.target.value)} rows={2} className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500 bg-white text-sm" placeholder="Descreva as sanções base..." />
+              <span className="text-[10px] text-slate-500 mt-1 block">*O motor sugerirá faixas de multa proporcionais ao risco mapeado na fase anterior (Arts. 156 a 163).</span>
 
               <label className="text-sm font-bold text-slate-800 mt-4 mb-2">Critérios de Pagamento</label>
               <input value={pagamento} onChange={(e) => setPagamento(e.target.value)} required className="p-3 border border-slate-300 rounded-md outline-none focus:ring-2 focus:ring-green-500" placeholder="Ex: Em até 30 dias..." />
