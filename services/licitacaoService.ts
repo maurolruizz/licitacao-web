@@ -1,8 +1,9 @@
-const isProducao = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+// A MÁGICA ACONTECE AQUI: O Next.js sabe automaticamente quando está na Vercel ('production')
+const isProducao = process.env.NODE_ENV === 'production';
 
 const API_URL = isProducao 
   ? 'https://licitacao-ai-core.onrender.com/api/v1' 
-  : 'http://localhost:8000/api/v1';
+  : 'http://127.0.0.1:8000/api/v1';
 
 export const licitacaoService = {
   // --- ROTAS ORIGINAIS (REGRESSÃO ZERO) ---
