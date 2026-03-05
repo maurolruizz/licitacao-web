@@ -5,6 +5,10 @@ import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 
 export default function PaginaETP() {
+  // === ESTADOS DO SENSOR DE CAPTURA (NOVO) ===
+  const [idProcesso, setIdProcesso] = useState<string | null>(null);
+  const [regimeProcesso, setRegimeProcesso] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -38,6 +42,33 @@ export default function PaginaETP() {
   // INJEÇÃO V5.2: O custo passa a ser uma constante fixa para não ser manipulável
   const custoGestaoPorContrato = 600; 
   const [mesesContrato, setMesesContrato] = useState<number>(12);
+
+  useEffect(() => {
+    // INJEÇÃO V5.3: SENSOR DE CAPTURA E MEMÓRIA
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const idUrl = urlParams.get('id');
+      const regimeUrl = urlParams.get('regime');
+      
+      // Captura o ID (Prioriza URL, faz fallback pro LocalStorage)
+      if (idUrl) {
+        setIdProcesso(idUrl);
+        localStorage.setItem('licitacao_id_processo', idUrl);
+      } else {
+        const storedId = localStorage.getItem('licitacao_id_processo');
+        if (storedId) setIdProcesso(storedId);
+      }
+
+      // Captura o Regime
+      if (regimeUrl) {
+        setRegimeProcesso(regimeUrl);
+        localStorage.setItem('licitacao_regime', regimeUrl);
+      } else {
+        const storedRegime = localStorage.getItem('licitacao_regime');
+        if (storedRegime) setRegimeProcesso(storedRegime);
+      }
+    }
+  }, []);
 
   const adicionarItemLote = () => setItensLote([...itensLote, { nome: '', quantidade: 1, especificacao: '' }]);
   
@@ -165,7 +196,7 @@ export default function PaginaETP() {
       impacto: impacto || 'Não avaliado',
       classificacao_risco: classificacaoRisco,
       is_agrupado: isAgrupado,
-      justificativa_agrupamento: justificativaCompleta, // Substituída para enviar a matemática pro backend
+      justificativa_agrupamento: justificativaCompleta, 
       itens_lote: isAgrupado ? itensLote : []
     };
 
@@ -173,7 +204,8 @@ export default function PaginaETP() {
       const data = await licitacaoService.gerarETP(payload);
       setResultado(data);
 
-      const processId = localStorage.getItem('licitacao_id_processo');
+      // INJEÇÃO V5.3: Usa o ID blindado do Sensor
+      const processId = idProcesso || localStorage.getItem('licitacao_id_processo');
       const orgaoAtual = JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}');
 
       if (processId) {
@@ -218,16 +250,48 @@ export default function PaginaETP() {
         </div>
 
         <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-300 items-center">
-          <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. Módulo DFD</Link>
+          <Link href="/dfd" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. Módulo DFD</Link>
           <span className="text-blue-800 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-md shadow-sm">2. Módulo ETP</span>
           <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
           <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
 
-        <header className="mb-8">
+        <header className="mb-6">
           <h1 className="text-3xl font-bold text-blue-900">Estudo Técnico Preliminar (ETP)</h1>
           <p className="text-slate-600 mt-1">Matriz de Alternativas, Riscos e Parcelamento de Objeto (Art. 18 e Art. 40)</p>
         </header>
+
+        {/* INJEÇÃO V5.3: PAINEL DE CONTROLE VISUAL */}
+        {idProcesso && (
+          <div className="mb-8 p-4 bg-slate-900 border-l-4 border-blue-500 rounded-r-md shadow-md flex justify-between items-center text-white">
+            <div>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Dossiê Eletrônico Aberto</span>
+              <span className="font-mono text-lg font-bold text-blue-400">{idProcesso}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Regime Parametrizado</span>
+              <span className="font-bold text-base text-green-400 uppercase">{regimeProcesso || 'Licitação Padrão'}</span>
+            </div>
+          </div>
+        )}
+
+        {/* INJEÇÃO V5.3: GUARDA-CORPO LEGAL (Bypass de Dispensa) */}
+        {regimeProcesso && (regimeProcesso.toUpperCase() === 'DISPENSA' || regimeProcesso.toUpperCase() === 'INEXIGIBILIDADE') && (
+          <div className="mb-8 p-6 bg-green-50 border border-green-200 rounded-xl flex items-start gap-4 shadow-sm animate-fadeIn">
+            <div className="text-green-600 text-3xl mt-1">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-green-900 text-lg mb-2">Guarda-Corpo Legal: ETP Facultativo (Art. 72, VIII)</h3>
+              <p className="text-green-800 text-sm leading-relaxed mb-4">
+                O motor detectou o regime de <strong>{regimeProcesso.toUpperCase()}</strong>. Conforme a Lei 14.133/2021, a elaboração do Estudo Técnico Preliminar é facultativa para Contratação Direta. O preenchimento abaixo é opcional.
+              </p>
+              <Link href="/tr" className="inline-block bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-sm shadow-md">
+                Pular ETP e Avançar para o TR →
+              </Link>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
@@ -494,6 +558,11 @@ export default function PaginaETP() {
           </div>
         </div>
       )}
+      
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+      `}} />
     </main>
   );
 }

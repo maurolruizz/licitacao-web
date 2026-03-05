@@ -47,7 +47,7 @@ export default function Cadastro() {
     localStorage.setItem('licitacao_auth', JSON.stringify(authPayload));
     localStorage.setItem('licitacao_orgao_data', JSON.stringify(dadosOrgao));
     
-    router.push('/');
+    router.push('/processos')
   };
 
   return (

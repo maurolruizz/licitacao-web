@@ -34,7 +34,7 @@ function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number
     } else {
       onCalculoCompleto(0, '');
     }
-  }, [consumoMensal, meses, margem]);
+  }, [consumoMensal, meses, margem, onCalculoCompleto]);
 
   return (
     <div className="p-5 border border-blue-200 rounded-md bg-slate-100 col-span-1 md:col-span-2 shadow-inner">
@@ -96,9 +96,13 @@ function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number
 }
 
 // ============================================================================
-// MAIN PAGE (INTACTA - Regressão Zero)
+// MAIN PAGE (BLINDADA COM SENSOR DE ROTA - Regressão Zero)
 // ============================================================================
 export default function Home() {
+  // === ESTADOS DO SENSOR DE CAPTURA (NOVO) ===
+  const [idProcesso, setIdProcesso] = useState<string | null>(null);
+  const [regimeProcesso, setRegimeProcesso] = useState<string | null>(null);
+
   // === ESTADOS DO SETUP INSTITUCIONAL (IBGE) ===
   const [cidadeInput, setCidadeInput] = useState('');
   const [loadIbge, setLoadIbge] = useState(false);
@@ -123,6 +127,22 @@ export default function Home() {
   const [dadosFormulario, setDadosFormulario] = useState<FormData | null>(null);
 
   useEffect(() => {
+    // 1. INJEÇÃO V5.3: SENSOR DE CAPTURA DA URL
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('id');
+      const regime = urlParams.get('regime');
+      
+      if (id) {
+        setIdProcesso(id);
+        localStorage.setItem('licitacao_id_processo', id); // Fixa o ID para as próximas fases (ETP/TR)
+      }
+      if (regime) {
+        setRegimeProcesso(regime);
+      }
+    }
+
+    // 2. Lógica Original
     const orgaoSalvo = localStorage.getItem('licitacao_orgao_data');
     if (orgaoSalvo) setOrgaoConfigurado(JSON.parse(orgaoSalvo));
   }, []);
@@ -168,12 +188,11 @@ export default function Home() {
     setLoading(true);
     setErro(null);
 
-    // O payload une os dados do formulário e o texto gerado pela calculadora secreta
     const payload = {
       setor_requisitante: (dadosFormulario.get('setor') || '').toString(),
       objeto_da_compra: (dadosFormulario.get('objeto') || '').toString(),
-      quantidade_estimada: quantidadeParametrizada, // Vem da Calculadora Matemática
-      origem_necessidade: `${origem}. ${memoriaDeCalculoText}`, // Funde o motivo com a memória de cálculo
+      quantidade_estimada: quantidadeParametrizada,
+      origem_necessidade: `${origem}. ${memoriaDeCalculoText}`, 
       impacto_institucional: impacto || 'Não selecionado',
       previsao_pca: pca,
       numero_pca: pca === 'Sim' ? numeroPca : '',
@@ -184,7 +203,8 @@ export default function Home() {
       const data = await licitacaoService.gerarDFD(payload);
       setResultado(data);
 
-      let processId = localStorage.getItem('licitacao_id_processo');
+      // INJEÇÃO V5.3: Prioriza o ID capturado pelo Sensor da URL
+      let processId = idProcesso || localStorage.getItem('licitacao_id_processo');
       if (!processId) {
         processId = `PROC-${Date.now()}`;
         localStorage.setItem('licitacao_id_processo', processId);
@@ -279,10 +299,24 @@ export default function Home() {
             <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
           </nav>
 
-          <header className="mb-8">
+          <header className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900">Fase 1: Formalização de Demanda (DFD)</h1>
             <p className="text-slate-500 text-sm">Estruturação guiada para blindagem institucional com Hash Absoluto.</p>
           </header>
+
+          {/* INJEÇÃO V5.3: PAINEL DE CONTROLE VISUAL (Só aparece se o processo foi iniciado pelo Roteador) */}
+          {idProcesso && (
+            <div className="mb-8 p-4 bg-slate-900 border-l-4 border-blue-500 rounded-r-md shadow-md flex justify-between items-center text-white">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Dossiê Eletrônico Aberto</span>
+                <span className="font-mono text-lg font-bold text-blue-400">{idProcesso}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Regime Parametrizado</span>
+                <span className="font-bold text-base text-green-400 uppercase">{regimeProcesso || 'Não Especificado'}</span>
+              </div>
+            </div>
+          )}
           
           <form onSubmit={prepararEnvio} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -8,6 +8,11 @@ import Link from 'next/link';
 export default function PaginaTR() {
   const router = useRouter(); 
   
+  // === ESTADOS DO SENSOR DE CAPTURA E BYPASS (V5.3) ===
+  const [idProcesso, setIdProcesso] = useState<string | null>(null);
+  const [regimeProcesso, setRegimeProcesso] = useState<string | null>(null);
+  const [isBypassETP, setIsBypassETP] = useState(false);
+
   const [objeto, setObjeto] = useState('');
   const [especificacao, setEspecificacao] = useState('');
   const [bloqueado, setBloqueado] = useState(false);
@@ -24,12 +29,45 @@ export default function PaginaTR() {
   const [riscoMapeadoETP, setRiscoMapeadoETP] = useState<string>('Não mapeado');
 
   useEffect(() => {
-    // Leitura da Memória do ETP
+    // 1. SENSOR DE CAPTURA (URL e Memória)
+    let regimeAtual: string | null = null;
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const idUrl = urlParams.get('id');
+      const regimeUrl = urlParams.get('regime');
+      
+      if (idUrl) {
+        setIdProcesso(idUrl);
+        localStorage.setItem('licitacao_id_processo', idUrl);
+      } else {
+        const storedId = localStorage.getItem('licitacao_id_processo');
+        if (storedId) setIdProcesso(storedId);
+      }
+
+      if (regimeUrl) {
+        setRegimeProcesso(regimeUrl);
+        localStorage.setItem('licitacao_regime', regimeUrl);
+        regimeAtual = regimeUrl;
+      } else {
+        const storedRegime = localStorage.getItem('licitacao_regime');
+        if (storedRegime) {
+          setRegimeProcesso(storedRegime);
+          regimeAtual = storedRegime;
+        }
+      }
+    }
+
+    // 2. DETECÇÃO DE BYPASS LEGAL (Dispensa/Inexigibilidade pulam o ETP)
+    // CORREÇÃO TYPESCRIPT: Forçando a avaliação booleana clara
+    const hasBypass: boolean = regimeAtual !== null && (regimeAtual.toUpperCase() === 'DISPENSA' || regimeAtual.toUpperCase() === 'INEXIGIBILIDADE');
+    setIsBypassETP(hasBypass);
+
+    // 3. Leitura da Memória do ETP
     const objetoSalvo = localStorage.getItem('licitacao_objeto');
     const especificacaoSalva = localStorage.getItem('licitacao_especificacao');
     const isAgrupadoSalvo = localStorage.getItem('licitacao_is_agrupado');
     const itensLoteSalvo = localStorage.getItem('licitacao_itens_lote');
-    const riscoSalvo = localStorage.getItem('licitacao_risco'); // Captura o risco do ETP
+    const riscoSalvo = localStorage.getItem('licitacao_risco'); 
     
     if (objetoSalvo && especificacaoSalva) {
       setObjeto(objetoSalvo);
@@ -44,11 +82,12 @@ export default function PaginaTR() {
         setIsAgrupado(true);
         setItensLote(JSON.parse(itensLoteSalvo));
       }
-    } else {
+    } else if (!hasBypass) {
+      // Só bloqueia se não for um regime de exceção (Bypass)
       setBloqueado(true);
     }
 
-    // Leitura do Censo IBGE salvo no DFD
+    // 4. Leitura do Censo IBGE salvo no DFD
     const orgaoData = localStorage.getItem('licitacao_orgao_data');
     if (orgaoData) {
       const orgao = JSON.parse(orgaoData);
@@ -123,7 +162,7 @@ export default function PaginaTR() {
       sancoes_aplicaveis: sancoes || 'Não selecionadas',
       is_agrupado: isAgrupado,
       itens_lote: isAgrupado ? itensLote : [],
-      risco_mapeado: riscoMapeadoETP // V5.1: Envia o risco cruzado para o motor sugerir a Sanção correta
+      risco_mapeado: riscoMapeadoETP 
     };
 
     try {
@@ -131,7 +170,8 @@ export default function PaginaTR() {
       setResultado(data);
       localStorage.setItem('licitacao_tr_status', 'concluido');
 
-      const processId = localStorage.getItem('licitacao_id_processo');
+      // INJEÇÃO V5.3: Prioriza o ID capturado pelo Sensor da URL/Memória
+      const processId = idProcesso || localStorage.getItem('licitacao_id_processo');
       const orgaoAtual = JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}');
 
       if (processId) {
@@ -177,7 +217,7 @@ export default function PaginaTR() {
         <div className="bg-slate-800 p-8 rounded-xl border border-red-500/50 max-w-lg text-center shadow-2xl">
           <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🔒</div>
           <h2 className="text-2xl font-bold text-white mb-2">Workflow Bloqueado</h2>
-          <p className="text-slate-400 mb-6">A Lei 14.133/2021 exige que o Estudo Técnico Preliminar (ETP) seja concluído antes da elaboração do Termo de Referência.</p>
+          <p className="text-slate-400 mb-6">A Lei 14.133/2021 exige que o Estudo Técnico Preliminar (ETP) seja concluído antes da elaboração do Termo de Referência em processos de Licitação.</p>
           <Link href="/etp" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg transition-colors inline-block">
             Ir para a Fase 2 (ETP)
           </Link>
@@ -202,35 +242,67 @@ export default function PaginaTR() {
         </div>
 
         <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
-          <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
+          <Link href="/dfd" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
           <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. ETP</Link>
           <span className="text-green-800 font-bold bg-green-50 border border-green-200 px-3 py-1.5 rounded-md shadow-sm">3. TR</span>
           <Link href="/pncp" className="text-slate-600 hover:text-purple-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. PNCP (Pesquisa de Preços) →</Link>
           <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
         
-        <header className="mb-8 flex justify-between items-start">
+        <header className="mb-6 flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-green-900">Termo de Referência (TR)</h1>
-            <p className="text-slate-500 text-sm mt-1">Estruturação Executiva (Art. 6º, XXIII) com Auto-Importação do ETP</p>
+            <p className="text-slate-500 text-sm mt-1">Estruturação Executiva (Art. 6º, XXIII) com Auto-Importação</p>
           </div>
           <button type="button" onClick={limparMemoria} className="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-md font-bold transition-colors border border-red-200 shadow-sm">
             🗑️ Forçar Limpeza (Teste de Trava)
           </button>
         </header>
+
+        {/* INJEÇÃO V5.3: PAINEL DE CONTROLE VISUAL E HASH */}
+        {idProcesso && (
+          <div className="mb-8 p-4 bg-slate-900 border-l-4 border-green-500 rounded-r-md shadow-md flex justify-between items-center text-white">
+            <div>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Dossiê Eletrônico Aberto</span>
+              <span className="font-mono text-lg font-bold text-green-400">{idProcesso}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Regime Parametrizado</span>
+              <span className="font-bold text-base text-blue-400 uppercase">{regimeProcesso || 'Licitação Padrão'}</span>
+            </div>
+          </div>
+        )}
         
         <form onSubmit={prepararEnvio} className="grid grid-cols-1 lg:grid-cols-2 gap-8 bg-white p-8 rounded-xl shadow-sm border border-slate-200">
           
           <div className="space-y-6">
-            <div className="flex flex-col border-l-4 border-green-500 pl-4 py-2 bg-green-50/50 rounded-r-md">
-              <label className="text-sm font-semibold mb-1 flex items-center gap-2 text-green-900">Objeto (Blindado pelo ETP)</label>
-              <input value={objeto} readOnly className="p-3 border border-green-200 rounded-md outline-none bg-slate-100 font-medium text-slate-600 cursor-not-allowed" />
+            <div className={`flex flex-col border-l-4 pl-4 py-2 rounded-r-md ${!isBypassETP ? 'border-green-500 bg-green-50/50' : 'border-blue-500 bg-blue-50/30'}`}>
+              <label className={`text-sm font-semibold mb-1 flex items-center gap-2 ${!isBypassETP ? 'text-green-900' : 'text-blue-900'}`}>
+                Objeto {!isBypassETP ? '(Blindado pelo ETP)' : '(Preenchimento Manual - Bypass)'}
+              </label>
+              <input 
+                value={objeto} 
+                onChange={(e) => setObjeto(e.target.value)}
+                readOnly={!isBypassETP} 
+                required
+                placeholder="Ex: Aquisição de equipamentos..."
+                className={`p-3 border rounded-md outline-none font-medium ${!isBypassETP ? 'border-green-200 bg-slate-100 text-slate-600 cursor-not-allowed' : 'border-blue-300 bg-white focus:ring-2 focus:ring-blue-500 text-slate-800'}`} 
+              />
             </div>
 
-            <div className="flex flex-col border-l-4 border-green-500 pl-4 py-2 bg-green-50/50 rounded-r-md">
-              <label className="text-sm font-semibold mb-1 flex items-center gap-2 text-green-900">Especificações Gerais (Blindado pelo ETP)</label>
-              <textarea value={especificacao} readOnly rows={4} className="p-3 border border-green-200 rounded-md outline-none bg-slate-100 font-medium leading-relaxed text-slate-600 cursor-not-allowed" />
-              {/* INJEÇÃO V5.1: AVISO DE COMPLIANCE NORMATIVO DA IA */}
+            <div className={`flex flex-col border-l-4 pl-4 py-2 rounded-r-md ${!isBypassETP ? 'border-green-500 bg-green-50/50' : 'border-blue-500 bg-blue-50/30'}`}>
+              <label className={`text-sm font-semibold mb-1 flex items-center gap-2 ${!isBypassETP ? 'text-green-900' : 'text-blue-900'}`}>
+                Especificações Gerais {!isBypassETP ? '(Blindado pelo ETP)' : '(Preenchimento Manual)'}
+              </label>
+              <textarea 
+                value={especificacao} 
+                onChange={(e) => setEspecificacao(e.target.value)}
+                readOnly={!isBypassETP} 
+                required
+                rows={4} 
+                placeholder="Detalhe as especificações técnicas da contratação..."
+                className={`p-3 border rounded-md outline-none font-medium leading-relaxed ${!isBypassETP ? 'border-green-200 bg-slate-100 text-slate-600 cursor-not-allowed' : 'border-blue-300 bg-white focus:ring-2 focus:ring-blue-500 text-slate-800'}`} 
+              />
               <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800 flex items-start gap-2">
                 <span className="font-bold">⚠️ Inteligência Normativa:</span> 
                 O sistema injetará automaticamente as normas técnicas (Ex: ABNT, NR, ANVISA) correspondentes no documento final. A validação técnica destas continua sendo sua responsabilidade.
@@ -327,7 +399,7 @@ export default function PaginaTR() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border-t-4 border-green-600">
             <h3 className="text-xl font-bold text-slate-900 mb-2">Assinatura de Hash Absoluto - TR</h3>
-            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema organizou os blocos obrigatórios mantendo a coerência com as decisões tomadas no ETP (Art. 40 e Art. 18).</p>
+            <p className="text-sm text-slate-600 mb-4 text-justify">O sistema organizou os blocos obrigatórios mantendo a coerência com as decisões tomadas na esteira documental.</p>
             
             <div className="bg-slate-50 p-4 rounded-md border border-slate-200 mb-6">
               <label className="flex items-start gap-3 cursor-pointer">
@@ -345,6 +417,11 @@ export default function PaginaTR() {
           </div>
         </div>
       )}
+
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+      `}} />
     </main>
   );
 }

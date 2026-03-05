@@ -8,6 +8,10 @@ import Link from 'next/link';
 export default function PaginaPNCP() {
   const router = useRouter();
   
+  // === ESTADOS DO SENSOR DE CAPTURA (INJEÇÃO V5.3) ===
+  const [idProcesso, setIdProcesso] = useState<string | null>(null);
+  const [regimeProcesso, setRegimeProcesso] = useState<string | null>(null);
+
   // === ESTADOS DE HERANÇA (REGRESSÃO ZERO) ===
   const [objetoPrincipal, setObjetoPrincipal] = useState('');
   const [isAgrupado, setIsAgrupado] = useState(false);
@@ -23,6 +27,30 @@ export default function PaginaPNCP() {
   const [selecoesPorItem, setSelecoesPorItem] = useState<Record<number, any[]>>({});
 
   useEffect(() => {
+    // 1. SENSOR DE CAPTURA (URL e Memória) - Injeção V5.3
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const idUrl = urlParams.get('id');
+      const regimeUrl = urlParams.get('regime');
+      
+      if (idUrl) {
+        setIdProcesso(idUrl);
+        localStorage.setItem('licitacao_id_processo', idUrl);
+      } else {
+        const storedId = localStorage.getItem('licitacao_id_processo');
+        if (storedId) setIdProcesso(storedId);
+      }
+
+      if (regimeUrl) {
+        setRegimeProcesso(regimeUrl);
+        localStorage.setItem('licitacao_regime', regimeUrl);
+      } else {
+        const storedRegime = localStorage.getItem('licitacao_regime');
+        if (storedRegime) setRegimeProcesso(storedRegime);
+      }
+    }
+
+    // 2. HERANÇA DO ETP/TR (Lógica Original Intacta)
     const objetoSalvo = localStorage.getItem('licitacao_objeto');
     const isAgrupadoSalvo = localStorage.getItem('licitacao_is_agrupado') === 'true';
     const itensLoteSalvo = localStorage.getItem('licitacao_itens_lote');
@@ -50,6 +78,7 @@ export default function PaginaPNCP() {
     if (!termo) return;
     setLoading(true);
     try {
+      // Conexão com o AI Core (FastAPI)
       const data = await licitacaoService.pesquisarPNCP(termo);
       if (data.resultados) {
         setResultadosDaBusca(data.resultados);
@@ -119,7 +148,7 @@ export default function PaginaPNCP() {
     }
   };
 
-  const salvarEConcluir = () => {
+  const salvarEConcluir = async () => {
     if (estatisticas.cv > 25) {
       const confirmar = window.confirm("O Coeficiente de Variação (CV) do último item está acima de 25%, contrariando o TCU. Deseja prosseguir assumindo o risco?");
       if (!confirmar) return;
@@ -135,6 +164,28 @@ export default function PaginaPNCP() {
     localStorage.setItem('licitacao_pncp_concluido', 'true');
     localStorage.setItem('licitacao_valor_estimado', valorGlobal.toString());
     
+    // INJEÇÃO V5.3: Amarração Final no Banco de Dados
+    try {
+      const processId = idProcesso || localStorage.getItem('licitacao_id_processo');
+      const orgaoAtual = JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}');
+
+      if (processId) {
+        await licitacaoService.salvarNoBanco({
+          id_processo: processId,
+          cidade: orgaoAtual.cidade || 'Não Conectado',
+          objeto: objetoPrincipal,
+          dados_completos: { 
+            fase_atual: 'PESQUISA_CONCLUIDA', 
+            valor_global_homologado: valorGlobal,
+            cesta_precos: selecoesPorItem 
+          },
+          hash_auditoria: `PNCP-IN65-${Date.now()}`
+        });
+      }
+    } catch (error) {
+      console.error("Aviso: Falha ao salvar no banco, mas processo local mantido.", error);
+    }
+
     alert("✅ Análise IN 65 concluída! Valor Estimado Global: R$ " + valorGlobal.toFixed(2).replace('.', ','));
     router.push('/processos');
   };
@@ -148,14 +199,14 @@ export default function PaginaPNCP() {
         </div>
 
         <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
-          <Link href="/" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
+          <Link href="/dfd" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
           <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. ETP</Link>
           <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 3. TR</Link>
           <span className="text-purple-800 font-bold bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-md shadow-sm">4. PNCP (Saneamento)</span>
           <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
 
-        <header className="mb-8 flex justify-between items-end">
+        <header className="mb-6 flex justify-between items-end">
           <div>
             <h1 className="text-3xl font-bold text-purple-900">Saneamento de Preços (IN 65/2021)</h1>
             <p className="text-slate-500 text-sm mt-1">Busca no PNCP, Análise de Dispersão (CV) e Expurgo de Outliers.</p>
@@ -166,6 +217,20 @@ export default function PaginaPNCP() {
             </div>
           )}
         </header>
+
+        {/* INJEÇÃO V5.3: PAINEL DE CONTROLE VISUAL */}
+        {idProcesso && (
+          <div className="mb-8 p-4 bg-slate-900 border-l-4 border-purple-500 rounded-r-md shadow-md flex justify-between items-center text-white">
+            <div>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Dossiê Eletrônico Aberto</span>
+              <span className="font-mono text-lg font-bold text-purple-400">{idProcesso}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Regime Parametrizado</span>
+              <span className="font-bold text-base text-blue-400 uppercase">{regimeProcesso || 'Licitação Padrão'}</span>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">

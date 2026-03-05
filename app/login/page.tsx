@@ -16,7 +16,7 @@ export default function Login() {
     if (data) {
       const parsed = JSON.parse(data);
       if (parsed.login === login && parsed.senha === senha) {
-        router.push('/');
+        router.push('/processos')
         return;
       }
     }
