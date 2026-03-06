@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
+import { buildProcessPath } from '../../lib/processUrl';
+import { gerarHashAuditoriaDocumento, rodapeHashAuditoriaHtml } from '../../lib/auditHash';
 
 export default function PaginaETP() {
-  // === ESTADOS DO SENSOR DE CAPTURA (NOVO) ===
+  const router = useRouter();
   const [idProcesso, setIdProcesso] = useState<string | null>(null);
   const [regimeProcesso, setRegimeProcesso] = useState<string | null>(null);
 
@@ -44,30 +47,39 @@ export default function PaginaETP() {
   const [mesesContrato, setMesesContrato] = useState<number>(12);
 
   useEffect(() => {
-    // INJEÇÃO V5.3: SENSOR DE CAPTURA E MEMÓRIA
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const idUrl = urlParams.get('id');
-      const regimeUrl = urlParams.get('regime');
-      
-      // Captura o ID (Prioriza URL, faz fallback pro LocalStorage)
-      if (idUrl) {
-        setIdProcesso(idUrl);
-        localStorage.setItem('licitacao_id_processo', idUrl);
-      } else {
-        const storedId = localStorage.getItem('licitacao_id_processo');
-        if (storedId) setIdProcesso(storedId);
-      }
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const idUrl = urlParams.get('id');
+    const regimeUrl = urlParams.get('regime');
 
-      // Captura o Regime
-      if (regimeUrl) {
-        setRegimeProcesso(regimeUrl);
-        localStorage.setItem('licitacao_regime', regimeUrl);
-      } else {
-        const storedRegime = localStorage.getItem('licitacao_regime');
-        if (storedRegime) setRegimeProcesso(storedRegime);
+    if (idUrl) {
+      setIdProcesso(idUrl);
+      localStorage.setItem('licitacao_id_processo', idUrl);
+    } else {
+      const storedId = localStorage.getItem('licitacao_id_processo');
+      if (storedId) setIdProcesso(storedId);
+      else {
+        router.replace('/novo?session=expired');
+        return;
       }
     }
+
+    if (regimeUrl) {
+      setRegimeProcesso(regimeUrl);
+      localStorage.setItem('licitacao_regime', regimeUrl);
+    } else {
+      const storedRegime = localStorage.getItem('licitacao_regime');
+      if (storedRegime) setRegimeProcesso(storedRegime);
+    }
+  }, [router]);
+
+  // Encadeamento DFD → ETP: preenche campos a partir do DFD sem sobrescrever input do usuário
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const dfdObjeto = localStorage.getItem('licitacao_dfd_objeto');
+    const dfdOrigem = localStorage.getItem('licitacao_dfd_origem');
+    if (dfdObjeto) setObjeto(prev => (prev && prev.trim() ? prev : dfdObjeto));
+    if (dfdOrigem) setNecessidade(prev => (prev && prev.trim() ? prev : dfdOrigem));
   }, []);
 
   const adicionarItemLote = () => setItensLote([...itensLote, { nome: '', quantidade: 1, especificacao: '' }]);
@@ -216,6 +228,7 @@ export default function PaginaETP() {
           dados_completos: { fase_atual: 'ETP_CONCLUIDO', payload_etp: payload },
           hash_auditoria: data.hash
         });
+        router.push(buildProcessPath('/tr', processId, regimeProcesso));
       }
     } catch (err: any) {
       setErro(err.toString());
@@ -224,15 +237,17 @@ export default function PaginaETP() {
     }
   };
 
-  const exportarParaWord = () => {
+  const exportarParaWord = async () => {
     if (!resultado) return;
+    const processId = idProcesso || (typeof window !== 'undefined' ? localStorage.getItem('licitacao_id_processo') : null) || '';
+    const { hash, timestamp } = await gerarHashAuditoriaDocumento(processId, 'ETP', resultado.texto_oficial);
     const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>ETP Oficial</title></head><body>";
-    const footer = "</body></html>";
     const htmlText = resultado.texto_oficial.split('\n').map((line: string) => `<p style="font-family: Arial, sans-serif; font-size: 11pt; text-align: justify; line-height: 1.5; margin-bottom: 6px;">${line}</p>`).join('');
-    const sourceHTML = header + htmlText + footer;
+    const hashFooter = rodapeHashAuditoriaHtml(hash, timestamp);
+    const sourceHTML = header + htmlText + hashFooter + '</body></html>';
     const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
-    const fileDownload = document.createElement("a");
+    const fileDownload = document.createElement('a');
     fileDownload.href = url;
     fileDownload.download = 'ETP_Oficial_Auditavel.doc';
     document.body.appendChild(fileDownload);
@@ -250,9 +265,9 @@ export default function PaginaETP() {
         </div>
 
         <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-300 items-center">
-          <Link href="/dfd" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. Módulo DFD</Link>
+          <Link href={buildProcessPath('/dfd', idProcesso, regimeProcesso)} className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. Módulo DFD</Link>
           <span className="text-blue-800 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-md shadow-sm">2. Módulo ETP</span>
-          <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
+          <Link href={buildProcessPath('/tr', idProcesso, regimeProcesso)} className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">3. Módulo TR →</Link>
           <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
 
@@ -286,7 +301,7 @@ export default function PaginaETP() {
               <p className="text-green-800 text-sm leading-relaxed mb-4">
                 O motor detectou o regime de <strong>{regimeProcesso.toUpperCase()}</strong>. Conforme a Lei 14.133/2021, a elaboração do Estudo Técnico Preliminar é facultativa para Contratação Direta. O preenchimento abaixo é opcional.
               </p>
-              <Link href="/tr" className="inline-block bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-sm shadow-md">
+              <Link href={buildProcessPath('/tr', idProcesso, regimeProcesso)} className="inline-block bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-sm shadow-md">
                 Pular ETP e Avançar para o TR →
               </Link>
             </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { LICITACAO_STORAGE_KEYS } from '../lib/storageKeys';
 
 export default function BannerTrial() {
   const [authData, setAuthData] = useState<any>(null);
@@ -31,8 +32,13 @@ export default function BannerTrial() {
   if (pathname === '/login' || pathname === '/cadastro' || !authData) return null;
 
   const handleLogout = () => {
-    localStorage.removeItem('licitacao_auth');
-    localStorage.removeItem('licitacao_orgao_data');
+    LICITACAO_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    if (typeof window !== 'undefined') {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('licitacao_')) localStorage.removeItem(key);
+      });
+      sessionStorage.clear();
+    }
     router.push('/login');
   };
 

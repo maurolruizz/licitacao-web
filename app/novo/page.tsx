@@ -1,10 +1,14 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation'; // <-- ADICIONADO: Motor de navegação profissional
+import { useRouter, useSearchParams } from 'next/navigation';
+import { licitacaoService } from '../../services/licitacaoService';
+import { LegalExplanationPanel } from '../../components/LegalExplanationPanel';
 
 export default function NovoProcessoPage() {
-  const router = useRouter(); // Instanciando o roteador
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const sessionExpired = searchParams.get('session') === 'expired';
 
   // Estado que controla em qual tela o usuário está
   const [tipoSelecionado, setTipoSelecionado] = useState<string | null>(null);
@@ -53,30 +57,36 @@ export default function NovoProcessoPage() {
       }
     }
 
-    // O PAYLOAD BLINDADO
+    const orgaoDataRaw = typeof window !== 'undefined' ? localStorage.getItem('licitacao_orgao_data') : null;
+    if (!orgaoDataRaw) {
+      setAlertaCompliance("Configure o órgão antes de criar o processo. Acesse a tela inicial ou Meus Processos para conectar o município (Censo/IBGE).");
+      setIsSubmitting(false);
+      return;
+    }
+    const orgaoData = JSON.parse(orgaoDataRaw);
+    const orgao_cidade = orgaoData.cidade;
+    if (!orgao_cidade) {
+      setAlertaCompliance("Dados do órgão incompletos. Reconecte o município na tela inicial.");
+      setIsSubmitting(false);
+      return;
+    }
+
     const payload = {
       tipoContratacao: tipoSelecionado,
       objeto,
       valorEstimado: valorNumerico,
       incisoDispensa,
       justificativaPreco,
-      razaoEscolha
+      razaoEscolha,
+      orgao_cidade
     };
-    
-    try {
-      // Aqui simula a chamada para a nossa API Python que salvará no banco (Supabase)
-      console.log("TRAVAS APROVADAS. Enviando para a API:", payload);
-      
-      // Simulando o tempo de rede (delay de 1 segundo para parecer profissional)
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // REDIRECIONAMENTO OFICIAL (O "Finalizar" que você pediu)
-      // Joga o usuário para a tela "Meus Processos" (ou para a tela de ETP dependendo do seu fluxo)
-      router.push('/processos'); 
-      
-    } catch (error) {
-      console.error("Erro ao criar processo:", error);
-      setAlertaCompliance("Erro de conexão com o servidor. Tente novamente.");
+    try {
+      const resposta = await licitacaoService.iniciarProcesso(payload);
+      const rotaDestino = resposta.rota_destino ?? `/dfd?id=${resposta.id_processo}&regime=${(tipoSelecionado || '').toLowerCase()}`;
+      router.push(rotaDestino);
+    } catch (error: any) {
+      setAlertaCompliance(error?.message || "Erro de conexão com o servidor. Tente novamente.");
       setIsSubmitting(false);
     }
   };
@@ -142,6 +152,12 @@ export default function NovoProcessoPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-8">
+
+          {sessionExpired && (
+            <div className="bg-amber-900/40 border-l-4 border-amber-500 p-5 rounded-r-lg">
+              <p className="text-amber-200 font-semibold">Contexto de processo não encontrado. Inicie um novo processo abaixo.</p>
+            </div>
+          )}
           
           {alertaCompliance && (
             <div className="bg-red-900/40 border-l-4 border-red-500 p-5 rounded-r-lg animate-fade-in">
@@ -167,6 +183,12 @@ export default function NovoProcessoPage() {
           {tipoSelecionado === 'DISPENSA' && (
             <div className="space-y-5 animate-fade-in">
               <h3 className="text-xl font-semibold text-green-400 border-b border-slate-700 pb-3">Governança da Dispensa</h3>
+              <LegalExplanationPanel variant="dispensa" dark className="rounded-xl" />
+              {incisoDispensa && valorEstimado && !alertaCompliance && (() => {
+                const v = parseFloat(valorEstimado);
+                const dentroLimite = (incisoDispensa === 'inciso_i' && v <= LIMITE_OBRAS_SERVICOS_ENG) || (incisoDispensa === 'inciso_ii' && v <= LIMITE_COMPRAS_OUTROS) || incisoDispensa === 'emergencia';
+                return dentroLimite ? <LegalExplanationPanel variant="valor_dentro_limite" dark className="rounded-xl" /> : null;
+              })()}
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-2">Fundamento Legal (Art. 75) *</label>
                 <select value={incisoDispensa} onChange={(e) => { setIncisoDispensa(e.target.value); setAlertaCompliance(null); }} className={`w-full bg-slate-900 border ${alertaCompliance ? 'border-red-500 focus:ring-red-500' : 'border-slate-700 focus:border-green-500 focus:ring-green-500'} rounded-xl p-4 text-white focus:outline-none focus:ring-1`} required disabled={isSubmitting}>
@@ -186,6 +208,7 @@ export default function NovoProcessoPage() {
           {tipoSelecionado === 'INEXIGIBILIDADE' && (
             <div className="space-y-5 animate-fade-in">
               <h3 className="text-xl font-semibold text-purple-400 border-b border-slate-700 pb-3">Governança da Inexigibilidade</h3>
+              <LegalExplanationPanel variant="inexigibilidade" dark className="rounded-xl" />
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-2">Razão da Escolha do Contratado *</label>
                 <textarea value={razaoEscolha} onChange={(e) => setRazaoEscolha(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white h-32 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500" placeholder="Explique por que apenas este fornecedor pode atender a demanda..." required disabled={isSubmitting}></textarea>

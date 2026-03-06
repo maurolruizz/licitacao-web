@@ -3,14 +3,20 @@
 import { useEffect, useState } from 'react';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // <-- ADICIONADO: O Motor do Cão de Guarda
+import { useRouter } from 'next/navigation';
+import { ComplianceTrafficLight } from '../../components/ComplianceTrafficLight';
+import { validateProcess } from '../../lib/processValidation';
 
 export default function MeusProcessos() {
   const router = useRouter(); // Instancia o roteador
   const [processos, setProcessos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [orgao, setOrgao] = useState<any>(null);
-  const [erroConexao, setErroConexao] = useState(false); // <-- ADICIONADO: Estado para gerenciar a queda do backend
+  const [erroConexao, setErroConexao] = useState(false);
+  /** Índice do card cuja validação está sendo exibida; null = nenhum */
+  const [validacaoAtiva, setValidacaoAtiva] = useState<number | null>(null);
+  /** Resultado da última validação (para o card validacaoAtiva) */
+  const [validacaoResultado, setValidacaoResultado] = useState<{ valid: boolean; messages: string[] } | null>(null);
 
   useEffect(() => {
     const carregarDados = async () => {
@@ -52,9 +58,14 @@ export default function MeusProcessos() {
     if (fase === 'DFD_CONCLUIDO') return { texto: 'Fase 1: DFD', cor: 'bg-blue-100 text-blue-800 border-blue-200' };
     if (fase === 'ETP_CONCLUIDO') return { texto: 'Fase 2: ETP', cor: 'bg-purple-100 text-purple-800 border-purple-200' };
     if (fase === 'TR_CONCLUIDO') return { texto: 'Fase 3: TR', cor: 'bg-green-100 text-green-800 border-green-200' };
-    // INJEÇÃO GO-LIVE: Reconhecimento da Fase 4 (IN 65)
-    if (fase === 'PESQUISA_CONCLUIDA') return { texto: 'Fase 4: Saneado (IN 65)', cor: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
+    if (fase === 'PESQUISA_CONCLUIDA') return { texto: 'Fase 4: Pesquisa de preços', cor: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
     return { texto: fase, cor: 'bg-slate-100 text-slate-800 border-slate-200' };
+  };
+
+  const handleValidarProcesso = (proc: any, index: number) => {
+    const resultado = validateProcess(proc);
+    setValidacaoAtiva(index);
+    setValidacaoResultado(resultado);
   };
 
   return (
@@ -132,14 +143,45 @@ export default function MeusProcessos() {
                       </p>
                     </div>
 
-                    <div className="mt-auto pt-4 border-t border-slate-100 flex gap-2">
-                      {/* EVOLUÇÃO GO-LIVE: Botão conecta direto ao módulo de Auditoria IGEP */}
-                      <button 
+                    <ComplianceTrafficLight faseAtual={proc.fase_atual || 'DFD_CONCLUIDO'} className="mb-4" />
+
+                    {validacaoAtiva === index && validacaoResultado && (
+                      <div className={`rounded-lg border p-4 mb-4 text-sm ${validacaoResultado.valid ? 'bg-emerald-50 border-emerald-300' : 'bg-amber-50 border-amber-300'}`}>
+                        {validacaoResultado.valid ? (
+                          <p className="text-emerald-800 font-semibold flex items-center gap-2">
+                            <span aria-hidden>✓</span>
+                            Processo em dia com a Lei 14.133. Todas as etapas obrigatórias foram concluídas.
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-amber-800 font-semibold mb-2 flex items-center gap-2">
+                              <span aria-hidden>⚠️</span>
+                              Itens pendentes para conformidade
+                            </p>
+                            <ul className="list-disc list-inside text-amber-800 space-y-1">
+                              {validacaoResultado.messages.map((msg, i) => (
+                                <li key={i}>{msg}</li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleValidarProcesso(proc, index)}
+                        className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded border border-slate-600 transition-colors text-xs text-center flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                        Validar Processo
+                      </button>
+                      <button
                         onClick={() => {
-                          // Salva o hash atual para a auditoria puxar automaticamente (opcional)
                           localStorage.setItem('licitacao_hash_auditoria_ativo', proc.hash_auditoria);
                           router.push('/auditoria');
-                        }} 
+                        }}
                         className="flex-1 bg-slate-900 text-yellow-400 hover:bg-slate-800 font-bold py-2 rounded border border-slate-700 transition-colors text-xs text-center flex items-center justify-center gap-2 shadow-sm"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>

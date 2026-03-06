@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
+import { buildProcessPath } from '../../lib/processUrl';
+import { gerarHashAuditoriaDocumento, rodapeHashAuditoriaHtml } from '../../lib/auditHash';
 
 export default function PaginaTR() {
   const router = useRouter(); 
@@ -29,31 +31,33 @@ export default function PaginaTR() {
   const [riscoMapeadoETP, setRiscoMapeadoETP] = useState<string>('Não mapeado');
 
   useEffect(() => {
-    // 1. SENSOR DE CAPTURA (URL e Memória)
     let regimeAtual: string | null = null;
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const idUrl = urlParams.get('id');
-      const regimeUrl = urlParams.get('regime');
-      
-      if (idUrl) {
-        setIdProcesso(idUrl);
-        localStorage.setItem('licitacao_id_processo', idUrl);
-      } else {
-        const storedId = localStorage.getItem('licitacao_id_processo');
-        if (storedId) setIdProcesso(storedId);
-      }
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const idUrl = urlParams.get('id');
+    const regimeUrl = urlParams.get('regime');
 
-      if (regimeUrl) {
-        setRegimeProcesso(regimeUrl);
-        localStorage.setItem('licitacao_regime', regimeUrl);
-        regimeAtual = regimeUrl;
-      } else {
-        const storedRegime = localStorage.getItem('licitacao_regime');
-        if (storedRegime) {
-          setRegimeProcesso(storedRegime);
-          regimeAtual = storedRegime;
-        }
+    if (idUrl) {
+      setIdProcesso(idUrl);
+      localStorage.setItem('licitacao_id_processo', idUrl);
+    } else {
+      const storedId = localStorage.getItem('licitacao_id_processo');
+      if (storedId) setIdProcesso(storedId);
+      else {
+        router.replace('/novo?session=expired');
+        return;
+      }
+    }
+
+    if (regimeUrl) {
+      setRegimeProcesso(regimeUrl);
+      localStorage.setItem('licitacao_regime', regimeUrl);
+      regimeAtual = regimeUrl;
+    } else {
+      const storedRegime = localStorage.getItem('licitacao_regime');
+      if (storedRegime) {
+        setRegimeProcesso(storedRegime);
+        regimeAtual = storedRegime;
       }
     }
 
@@ -62,27 +66,26 @@ export default function PaginaTR() {
     const hasBypass: boolean = regimeAtual !== null && (regimeAtual.toUpperCase() === 'DISPENSA' || regimeAtual.toUpperCase() === 'INEXIGIBILIDADE');
     setIsBypassETP(hasBypass);
 
-    // 3. Leitura da Memória do ETP
+    // 3. Leitura da Memória do ETP (encadeamento ETP → TR; não sobrescreve input do usuário)
     const objetoSalvo = localStorage.getItem('licitacao_objeto');
     const especificacaoSalva = localStorage.getItem('licitacao_especificacao');
     const isAgrupadoSalvo = localStorage.getItem('licitacao_is_agrupado');
     const itensLoteSalvo = localStorage.getItem('licitacao_itens_lote');
-    const riscoSalvo = localStorage.getItem('licitacao_risco'); 
-    
-    if (objetoSalvo && especificacaoSalva) {
-      setObjeto(objetoSalvo);
-      setEspecificacao(especificacaoSalva);
-      
-      if (riscoSalvo) {
-         setRiscoMapeadoETP(riscoSalvo);
-      }
-      
-      // Carrega os Lotes se existirem
-      if (isAgrupadoSalvo === 'true' && itensLoteSalvo) {
+    const riscoSalvo = localStorage.getItem('licitacao_risco');
+
+    if (objetoSalvo) setObjeto(prev => (prev && prev.trim() ? prev : objetoSalvo));
+    if (especificacaoSalva) setEspecificacao(prev => (prev && prev.trim() ? prev : especificacaoSalva));
+    if (riscoSalvo) setRiscoMapeadoETP(prev => (prev && prev !== 'Não mapeado' ? prev : riscoSalvo));
+    if (isAgrupadoSalvo === 'true' && itensLoteSalvo) {
+      try {
         setIsAgrupado(true);
         setItensLote(JSON.parse(itensLoteSalvo));
+      } catch {
+        // ignora JSON inválido
       }
-    } else if (!hasBypass) {
+    }
+
+    if (!objetoSalvo && !especificacaoSalva && !hasBypass) {
       // Só bloqueia se não for um regime de exceção (Bypass)
       setBloqueado(true);
     }
@@ -99,7 +102,7 @@ export default function PaginaTR() {
         setPagamento("Em até 30 dias após o ateste da nota fiscal");
       }
     }
-  }, []);
+  }, [router]);
 
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
@@ -194,15 +197,17 @@ export default function PaginaTR() {
     }
   };
 
-  const exportarParaWord = () => {
+  const exportarParaWord = async () => {
     if (!resultado) return;
+    const processId = idProcesso || (typeof window !== 'undefined' ? localStorage.getItem('licitacao_id_processo') : null) || '';
+    const { hash, timestamp } = await gerarHashAuditoriaDocumento(processId, 'TR', resultado.texto_oficial);
     const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Termo de Referência Oficial</title></head><body>";
-    const footer = "</body></html>";
     const htmlText = resultado.texto_oficial.split('\n').map((line: string) => `<p style="font-family: Arial, sans-serif; font-size: 11pt; text-align: justify; line-height: 1.5; margin-bottom: 6px;">${line}</p>`).join('');
-    const sourceHTML = header + htmlText + footer;
+    const hashFooter = rodapeHashAuditoriaHtml(hash, timestamp);
+    const sourceHTML = header + htmlText + hashFooter + '</body></html>';
     const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
-    const fileDownload = document.createElement("a");
+    const fileDownload = document.createElement('a');
     fileDownload.href = url;
     fileDownload.download = 'TR_Oficial_Auditavel.doc';
     document.body.appendChild(fileDownload);
@@ -218,7 +223,7 @@ export default function PaginaTR() {
           <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🔒</div>
           <h2 className="text-2xl font-bold text-white mb-2">Workflow Bloqueado</h2>
           <p className="text-slate-400 mb-6">A Lei 14.133/2021 exige que o Estudo Técnico Preliminar (ETP) seja concluído antes da elaboração do Termo de Referência em processos de Licitação.</p>
-          <Link href="/etp" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg transition-colors inline-block">
+          <Link href={buildProcessPath('/etp', idProcesso, regimeProcesso)} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-lg transition-colors inline-block">
             Ir para a Fase 2 (ETP)
           </Link>
         </div>
@@ -242,10 +247,10 @@ export default function PaginaTR() {
         </div>
 
         <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
-          <Link href="/dfd" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
-          <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. ETP</Link>
+          <Link href={buildProcessPath('/dfd', idProcesso, regimeProcesso)} className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
+          <Link href={buildProcessPath('/etp', idProcesso, regimeProcesso)} className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. ETP</Link>
           <span className="text-green-800 font-bold bg-green-50 border border-green-200 px-3 py-1.5 rounded-md shadow-sm">3. TR</span>
-          <Link href="/pncp" className="text-slate-600 hover:text-purple-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. PNCP (Pesquisa de Preços) →</Link>
+          <Link href={buildProcessPath('/pncp', idProcesso, regimeProcesso)} className="text-slate-600 hover:text-purple-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">4. PNCP (Pesquisa de Preços) →</Link>
           <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
         </nav>
         
@@ -383,7 +388,7 @@ export default function PaginaTR() {
                 <button type="button" onClick={exportarParaWord} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors flex items-center gap-2">
                   📄 Exportar Word
                 </button>
-                <button type="button" onClick={() => router.push('/pncp')} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors flex items-center gap-2">
+                <button type="button" onClick={() => router.push(buildProcessPath('/pncp', idProcesso, regimeProcesso))} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-colors flex items-center gap-2">
                   Avançar para Etapa 4 (PNCP) ➡️
                 </button>
               </div>

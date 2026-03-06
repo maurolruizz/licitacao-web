@@ -4,6 +4,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
+import { buildProcessPath } from '../../lib/processUrl';
+import { runFullAnalysis } from '../../lib/pncpStatsEngine';
+import { gerarRelatorioIN65Docx, downloadRelatorioIN65 } from '../../lib/pncpReportDocx';
+import { LegalExplanationPanel } from '../../components/LegalExplanationPanel';
 
 export default function PaginaPNCP() {
   const router = useRouter();
@@ -27,27 +31,29 @@ export default function PaginaPNCP() {
   const [selecoesPorItem, setSelecoesPorItem] = useState<Record<number, any[]>>({});
 
   useEffect(() => {
-    // 1. SENSOR DE CAPTURA (URL e Memória) - Injeção V5.3
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const idUrl = urlParams.get('id');
-      const regimeUrl = urlParams.get('regime');
-      
-      if (idUrl) {
-        setIdProcesso(idUrl);
-        localStorage.setItem('licitacao_id_processo', idUrl);
-      } else {
-        const storedId = localStorage.getItem('licitacao_id_processo');
-        if (storedId) setIdProcesso(storedId);
-      }
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const idUrl = urlParams.get('id');
+    const regimeUrl = urlParams.get('regime');
 
-      if (regimeUrl) {
-        setRegimeProcesso(regimeUrl);
-        localStorage.setItem('licitacao_regime', regimeUrl);
-      } else {
-        const storedRegime = localStorage.getItem('licitacao_regime');
-        if (storedRegime) setRegimeProcesso(storedRegime);
+    if (idUrl) {
+      setIdProcesso(idUrl);
+      localStorage.setItem('licitacao_id_processo', idUrl);
+    } else {
+      const storedId = localStorage.getItem('licitacao_id_processo');
+      if (storedId) setIdProcesso(storedId);
+      else {
+        router.replace('/novo?session=expired');
+        return;
       }
+    }
+
+    if (regimeUrl) {
+      setRegimeProcesso(regimeUrl);
+      localStorage.setItem('licitacao_regime', regimeUrl);
+    } else {
+      const storedRegime = localStorage.getItem('licitacao_regime');
+      if (storedRegime) setRegimeProcesso(storedRegime);
     }
 
     // 2. HERANÇA DO ETP/TR (Lógica Original Intacta)
@@ -69,7 +75,7 @@ export default function PaginaPNCP() {
         setTermoBusca(objetoSalvo);
       }
     }
-  }, []);
+  }, [router]);
 
   const itemAtivo = itensParaPesquisar[itemAtivoIndex];
   const selecionadosAtuais = selecoesPorItem[itemAtivoIndex] || [];
@@ -114,28 +120,50 @@ export default function PaginaPNCP() {
     }
   };
 
-  // === MATEMÁTICA DE GOVERNANÇA (IN 65/2021) ===
-  const estatisticas = useMemo(() => {
-    const n = selecionadosAtuais.length;
-    if (n === 0) return { media: 0, dp: 0, cv: 0, valid: false };
-    
-    const soma = selecionadosAtuais.reduce((acc, curr) => acc + curr.valor_unitario, 0);
-    const media = soma / n;
-    
-    if (n === 1) return { media, dp: 0, cv: 0, valid: false };
+  // === MOTOR DE ANÁLISE ESTATÍSTICA (IN 65/2021) ===
+  const valoresSelecionados = useMemo(
+    () => selecionadosAtuais.map((s) => s.valor_unitario),
+    [selecionadosAtuais]
+  );
+  const analysis = useMemo(() => runFullAnalysis(valoresSelecionados), [valoresSelecionados]);
 
-    const somaDosQuadrados = selecionadosAtuais.reduce((acc, curr) => acc + Math.pow(curr.valor_unitario - media, 2), 0);
-    const variancia = somaDosQuadrados / (n - 1);
-    const dp = Math.sqrt(variancia);
-    
-    const cv = (dp / media) * 100;
-    
-    return { media, dp, cv, valid: n >= 3 };
-  }, [selecionadosAtuais]);
+  // Compatibilidade: estatísticas e validade para fluxo (mín. 3 preços; após expurgo, mínimo 3 restantes)
+  const estatisticas = useMemo(() => {
+    const ref = analysis.afterOutlierRemoval ?? analysis.raw;
+    const valid =
+      analysis.raw.count >= 3 &&
+      (!analysis.hadOutliers || (analysis.afterOutlierRemoval?.valid ?? false));
+    return {
+      media: ref.mean,
+      dp: ref.standardDeviation,
+      cv: ref.coefficientOfVariation,
+      valid,
+      referencePrice: analysis.referencePrice,
+    };
+  }, [analysis]);
+
+  // Valores efetivamente usados no cálculo do preço de referência (após expurgo de outliers, se houver)
+  const valoresUsadosNoPrecoReferencia = useMemo(() => {
+    if (analysis.hadOutliers && analysis.iqr?.valuesWithoutOutliers?.length) {
+      return analysis.iqr.valuesWithoutOutliers;
+    }
+    return valoresSelecionados;
+  }, [analysis.hadOutliers, analysis.iqr?.valuesWithoutOutliers, valoresSelecionados]);
+
+  // Análise de desvio: preço de referência (IN 65) vs valor estimado (média simples das amostras)
+  const analiseDesvio = useMemo(() => {
+    if (analysis.raw.count < 2 || analysis.raw.mean <= 0) return null;
+    const valorEstimado = analysis.raw.mean;
+    const valorReferencia = analysis.referencePrice;
+    const desvio = (valorReferencia - valorEstimado) / valorEstimado;
+    const desvioPercentual = desvio * 100;
+    const sobreprecoAlerta = desvio > 0.30;
+    return { valorEstimado, valorReferencia, desvio, desvioPercentual, sobreprecoAlerta };
+  }, [analysis.raw.count, analysis.raw.mean, analysis.referencePrice]);
 
   const avancarParaProximoItem = () => {
     if (!estatisticas.valid) {
-      alert("A IN 65 exige no mínimo 3 preços válidos para o balizamento de cada item.");
+      alert("É necessário selecionar pelo menos 3 preços para cada item, conforme orientação do Tribunal de Contas.");
       return;
     }
     if (itemAtivoIndex < itensParaPesquisar.length - 1) {
@@ -148,17 +176,42 @@ export default function PaginaPNCP() {
     }
   };
 
+  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
+
+  const gerarRelatorio = async () => {
+    setGerandoRelatorio(true);
+    try {
+      const orgaoData = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}') : {};
+      const dados = {
+        objetoContratacao: objetoPrincipal,
+        idProcesso: idProcesso ?? undefined,
+        regime: regimeProcesso ?? undefined,
+        municipio: orgaoData.cidade ?? undefined,
+        itens: itensParaPesquisar,
+        selecoesPorItem,
+      };
+      const blob = await gerarRelatorioIN65Docx(dados);
+      downloadRelatorioIN65(blob);
+    } catch (err) {
+      console.error('Erro ao gerar relatório', err);
+      alert('Não foi possível gerar o relatório. Tente novamente.');
+    } finally {
+      setGerandoRelatorio(false);
+    }
+  };
+
   const salvarEConcluir = async () => {
     if (estatisticas.cv > 25) {
-      const confirmar = window.confirm("O Coeficiente de Variação (CV) do último item está acima de 25%, contrariando o TCU. Deseja prosseguir assumindo o risco?");
+      const confirmar = window.confirm("Os preços deste item estão muito diferentes entre si. O Tribunal de Contas recomenda ajustar (remover valores extremos) antes de concluir. Deseja mesmo prosseguir?");
       if (!confirmar) return;
     }
     
     let valorGlobal = 0;
     itensParaPesquisar.forEach((item, index) => {
       const sel = selecoesPorItem[index] || [];
-      const med = sel.reduce((a, b) => a + b.valor_unitario, 0) / (sel.length || 1);
-      valorGlobal += med * (item.quantidade || 1);
+      const vals = sel.map((s) => s.valor_unitario);
+      const refPrice = index === itemAtivoIndex ? analysis.referencePrice : (vals.length ? runFullAnalysis(vals).referencePrice : 0);
+      valorGlobal += refPrice * (item.quantidade || 1);
     });
 
     localStorage.setItem('licitacao_pncp_concluido', 'true');
@@ -186,155 +239,299 @@ export default function PaginaPNCP() {
       console.error("Aviso: Falha ao salvar no banco, mas processo local mantido.", error);
     }
 
-    alert("✅ Análise IN 65 concluída! Valor Estimado Global: R$ " + valorGlobal.toFixed(2).replace('.', ','));
+    alert("Pesquisa de preços concluída. Valor estimado global: R$ " + valorGlobal.toFixed(2).replace('.', ','));
     router.push('/processos');
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-8 font-sans text-slate-900 pb-20">
-      <div className="max-w-6xl mx-auto">
-        
-        <div className="mb-6 bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono text-center tracking-wider shadow-sm">
-          MÓDULO DE GOVERNANÇA E COMPLIANCE - IN 65 (BALIZAMENTO E SANEAMENTO)
+    <main className="min-h-screen bg-slate-100 font-sans text-slate-900 antialiased">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24">
+        {/* Top bar institucional */}
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="border-b border-slate-200 pb-4 sm:pb-0 sm:border-0">
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Pesquisa de Preços — PNCP</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Pesquisa de preços conforme orientações do Tribunal de Contas</p>
+          </div>
+          <nav className="flex flex-wrap gap-2 text-sm font-medium">
+            <Link href={buildProcessPath('/dfd', idProcesso, regimeProcesso)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-200 px-3 py-2 rounded-lg transition-colors">1. DFD</Link>
+            <Link href={buildProcessPath('/etp', idProcesso, regimeProcesso)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-200 px-3 py-2 rounded-lg transition-colors">2. ETP</Link>
+            <Link href={buildProcessPath('/tr', idProcesso, regimeProcesso)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-200 px-3 py-2 rounded-lg transition-colors">3. TR</Link>
+            <span className="bg-slate-800 text-white px-3 py-2 rounded-lg font-semibold">4. PNCP</span>
+            <Link href="/auditoria" className="text-amber-700 hover:bg-amber-100 px-3 py-2 rounded-lg transition-colors font-semibold">Auditoria</Link>
+          </nav>
         </div>
 
-        <nav className="mb-8 text-sm font-medium flex flex-wrap gap-2 border-b pb-4 border-slate-200 items-center">
-          <Link href="/dfd" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 1. DFD</Link>
-          <Link href="/etp" className="text-slate-600 hover:text-blue-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 2. ETP</Link>
-          <Link href="/tr" className="text-slate-600 hover:text-green-700 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-all">← 3. TR</Link>
-          <span className="text-purple-800 font-bold bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-md shadow-sm">4. PNCP (Saneamento)</span>
-          <Link href="/auditoria" className="ml-auto text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-md transition-all font-bold">🛡️ Auditoria</Link>
-        </nav>
-
-        <header className="mb-6 flex justify-between items-end">
-          <div>
-            <h1 className="text-3xl font-bold text-purple-900">Saneamento de Preços (IN 65/2021)</h1>
-            <p className="text-slate-500 text-sm mt-1">Busca no PNCP, Análise de Dispersão (CV) e Expurgo de Outliers.</p>
-          </div>
-          {isAgrupado && (
-            <div className="bg-purple-100 text-purple-800 font-bold px-4 py-2 rounded-lg border border-purple-200 text-sm shadow-sm">
-              Pesquisando Item {itemAtivoIndex + 1} de {itensParaPesquisar.length}
-            </div>
-          )}
-        </header>
-
-        {/* INJEÇÃO V5.3: PAINEL DE CONTROLE VISUAL */}
+        {/* Contexto do processo */}
         {idProcesso && (
-          <div className="mb-8 p-4 bg-slate-900 border-l-4 border-purple-500 rounded-r-md shadow-md flex justify-between items-center text-white">
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Dossiê Eletrônico Aberto</span>
-              <span className="font-mono text-lg font-bold text-purple-400">{idProcesso}</span>
-            </div>
-            <div className="text-right">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">Regime Parametrizado</span>
-              <span className="font-bold text-base text-blue-400 uppercase">{regimeProcesso || 'Licitação Padrão'}</span>
+          <div className="mb-6 rounded-xl bg-white border border-slate-200 shadow-sm px-5 py-4 flex flex-wrap justify-between items-center gap-4">
+            <div className="flex items-center gap-6">
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Processo</span>
+                <span className="font-mono font-bold text-slate-800">{idProcesso}</span>
+              </div>
+              <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Regime</span>
+                <span className="font-semibold text-slate-700">{regimeProcesso || 'Licitação padrão'}</span>
+              </div>
+              {isAgrupado && (
+                <>
+                  <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Item</span>
+                    <span className="font-semibold text-slate-700">{itemAtivoIndex + 1} de {itensParaPesquisar.length}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Coluna esquerda: 1. Resultados de preços */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-              <div className="flex flex-col mb-4 border-l-4 border-purple-500 pl-4 py-2 bg-purple-50 rounded-r-md">
-                <span className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-1">Alvo da Pesquisa</span>
-                <span className="text-lg font-bold text-slate-800">{itemAtivo?.nome || 'Carregando...'}</span>
-                {itemAtivo?.especificacao && <span className="text-xs text-slate-500">{itemAtivo.especificacao}</span>}
+            <section className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/80">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-200 text-slate-700 font-mono text-sm">1</span>
+                  Resultados de preços
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">Consulta PNCP · Selecione os preços para inclusão na análise</p>
               </div>
-
-              <div className="flex items-end gap-4 mt-6">
-                <div className="flex-1">
-                  <label className="text-sm font-bold text-slate-800 mb-2 block">Parâmetro de Busca</label>
-                  <input value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} className="w-full p-3 border border-slate-300 rounded-md outline-none bg-white focus:ring-2 focus:ring-purple-500 text-sm" placeholder="Refine o termo..." />
-                </div>
-                <button onClick={() => buscarPrecos(termoBusca)} disabled={loading} className="bg-purple-700 hover:bg-purple-800 text-white font-bold py-3 px-6 rounded-md transition-colors shadow-sm text-sm">
-                  {loading ? 'Consultando...' : '🔍 Buscar Bases'}
-                </button>
-              </div>
-            </div>
-
-            {resultadosDaBusca.length > 0 && (
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wider border-b pb-2">Parâmetros Encontrados</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {resultadosDaBusca.map((item, index) => {
-                    const isSelected = selecionadosAtuais.find(s => s.id_compra === item.id_compra);
-                    return (
-                      <div key={index} className={`p-4 rounded-lg border transition-all relative ${isSelected ? 'border-purple-600 bg-purple-50/50 shadow-md ring-1 ring-purple-600' : 'border-slate-200 bg-white hover:border-purple-300'}`}>
-                        <div className="flex justify-between items-start mb-2 cursor-pointer" onClick={() => toggleSelecao(item)}>
-                          <span className="text-[10px] font-bold bg-slate-800 text-white px-2 py-1 rounded">{item.id_compra}</span>
-                          <input type="checkbox" checked={!!isSelected} readOnly className="w-5 h-5 text-purple-600 rounded border-slate-300 pointer-events-none" />
-                        </div>
-                        <p className="text-sm font-bold text-slate-800 mb-1 leading-tight">{item.descricao_item}</p>
-                        <p className="text-[11px] text-slate-500 mb-3">{item.orgao_comprador} | <span className="font-semibold">{item.data_publicacao}</span></p>
-                        
-                        <div className="flex justify-between items-end mt-4 pt-4 border-t border-slate-200/60">
-                          <div>
-                            {item.corrigidoIPCA && <span className="block text-[10px] text-orange-600 font-bold mb-1">CORRIGIDO IPCA (+4.8%)</span>}
-                            <span className="text-lg font-bold text-green-700">R$ {item.valor_unitario.toFixed(2).replace('.', ',')}</span>
-                          </div>
-                          {!item.corrigidoIPCA && (
-                            <button onClick={(e) => { e.stopPropagation(); aplicarCorrecaoIPCA(item); }} className="text-[10px] bg-orange-100 hover:bg-orange-200 text-orange-800 font-bold py-1.5 px-3 rounded transition-colors border border-orange-200">
-                              📈 Aplicar IPCA
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-slate-900 p-6 rounded-xl shadow-lg border border-slate-800 text-white sticky top-6">
-              <h3 className="font-bold text-slate-100 mb-6 border-b border-slate-700 pb-2 flex items-center gap-2">
-                <span>🧮</span> Motor Matemático IN 65
-              </h3>
-              
-              <div className="space-y-4 text-sm font-mono">
-                <div className="flex justify-between items-center bg-slate-800 p-3 rounded">
-                  <span className="text-slate-400">Amostras Válidas:</span>
-                  <span className={`font-bold text-lg ${estatisticas.valid ? 'text-green-400' : 'text-red-400'}`}>{selecionadosAtuais.length} <span className="text-xs text-slate-500 font-sans">/ Mín. 3</span></span>
-                </div>
-                
-                <div className="flex justify-between items-center bg-slate-800 p-3 rounded">
-                  <span className="text-slate-400">Desvio Padrão (R$):</span>
-                  <span className="font-bold text-slate-200">{estatisticas.dp.toFixed(2)}</span>
+              <div className="p-6 space-y-5">
+                <div>
+                  <label className="text-sm font-medium text-slate-700 block mb-2">Objeto / termo de busca</label>
+                  <div className="flex gap-3">
+                    <input
+                      value={termoBusca}
+                      onChange={(e) => setTermoBusca(e.target.value)}
+                      className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm focus:ring-2 focus:ring-slate-400 focus:border-slate-400 outline-none"
+                      placeholder="Ex.: material de escritório"
+                    />
+                    <button
+                      onClick={() => buscarPrecos(termoBusca)}
+                      disabled={loading}
+                      className="rounded-lg bg-slate-800 hover:bg-slate-700 disabled:bg-slate-400 text-white font-semibold px-5 py-2.5 text-sm transition-colors"
+                    >
+                      {loading ? 'Buscando...' : 'Buscar'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1.5">{itemAtivo?.nome && `Item atual: ${itemAtivo.nome}`}</p>
                 </div>
 
-                <div className={`flex justify-between items-center p-3 rounded border ${estatisticas.cv > 25 ? 'bg-red-900/50 border-red-500' : 'bg-slate-800 border-slate-800'}`}>
-                  <span className="text-slate-400">Coeficiente Var. (CV):</span>
-                  <span className={`font-bold text-lg ${estatisticas.cv > 25 ? 'text-red-400' : 'text-blue-400'}`}>{estatisticas.cv.toFixed(2)}%</span>
-                </div>
-              </div>
-
-              {estatisticas.cv > 25 && (
-                <div className="mt-4 p-3 bg-red-950/80 border border-red-800 rounded-md text-xs text-red-200 leading-relaxed text-justify">
-                  ⚠️ <strong>ALERTA TCU:</strong> CV superior a 25% indica alta dispersão. Recomenda-se o expurgo do valor extremo (outlier).
-                </div>
-              )}
-
-              <div className="mt-8 border-t border-slate-700 pt-6">
-                <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider text-center">Valor Unitário Saneado (Média)</p>
-                <p className="text-3xl font-bold text-center text-green-400">R$ {estatisticas.media.toFixed(2).replace('.', ',')}</p>
-                {isAgrupado && itemAtivo && (
-                  <p className="text-center text-xs text-slate-500 mt-2">Valor Total do Item: R$ {(estatisticas.media * (itemAtivo.quantidade || 1)).toFixed(2).replace('.', ',')}</p>
+                {resultadosDaBusca.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-600 mb-3">Selecione na tabela os preços que comporão a análise (mín. 3).</p>
+                    <div className="overflow-x-auto rounded-lg border border-slate-200">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-slate-100 border-b border-slate-200">
+                            <th className="text-left py-3 px-4 font-semibold text-slate-700 w-12">Incluir</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-700">Fonte (órgão)</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-700">Descrição</th>
+                            <th className="text-right py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">Preço unit.</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">Data</th>
+                            <th className="w-20 py-3 px-2" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {resultadosDaBusca.map((item, index) => {
+                            const isSelected = selecionadosAtuais.some((s) => s.id_compra === item.id_compra);
+                            return (
+                              <tr
+                                key={item.id_compra ?? index}
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => toggleSelecao(item)}
+                                onKeyDown={(e) => e.key === 'Enter' && toggleSelecao(item)}
+                                className={`border-b border-slate-100 last:border-0 transition-colors ${isSelected ? 'bg-emerald-50/70 hover:bg-emerald-100/70' : 'hover:bg-slate-50'}`}
+                              >
+                                <td className="py-3 px-4">
+                                  <input type="checkbox" checked={isSelected} readOnly className="w-4 h-4 rounded border-slate-300 text-emerald-600 pointer-events-none" aria-hidden />
+                                </td>
+                                <td className="py-3 px-4 text-slate-800 max-w-[160px] truncate" title={item.orgao_comprador}>{item.orgao_comprador || '—'}</td>
+                                <td className="py-3 px-4 text-slate-800 max-w-[220px]" title={item.descricao_item}><span className="line-clamp-2">{item.descricao_item || '—'}</span></td>
+                                <td className="py-3 px-4 text-right font-semibold text-slate-800 whitespace-nowrap">R$ {item.valor_unitario.toFixed(2).replace('.', ',')}{item.corrigidoIPCA && <span className="block text-[10px] text-amber-600 font-normal">IPCA</span>}</td>
+                                <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{item.data_publicacao || '—'}</td>
+                                <td className="py-3 px-2">
+                                  {!item.corrigidoIPCA && (
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); aplicarCorrecaoIPCA(item); }} className="text-[10px] bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold py-1.5 px-2 rounded border border-amber-200">IPCA</button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 )}
               </div>
-
-              <div className="mt-8">
-                <button 
-                  onClick={avancarParaProximoItem}
-                  disabled={!estatisticas.valid}
-                  className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold py-4 rounded-lg transition-all shadow-md text-sm uppercase tracking-wider"
-                >
-                  {itemAtivoIndex < itensParaPesquisar.length - 1 ? 'Salvar Item e Avançar →' : 'Assinar Pesquisa e Concluir ✓'}
-                </button>
-              </div>
-            </div>
+            </section>
           </div>
 
+          {/* Coluna direita: 2. Análise | 3. Conformidade | 4. Documentação */}
+          <div className="space-y-6">
+            {/* 2. Análise estatística */}
+            <section className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden sticky top-6">
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/80">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-200 text-slate-700 font-mono text-sm">2</span>
+                  Análise estatística
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">Resumo dos preços selecionados e preço de referência</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className={`flex justify-between items-center rounded-lg px-4 py-3 border ${analysis.raw.count >= 3 ? 'bg-emerald-50 border-emerald-200' : analysis.raw.count > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+                  <span className="text-sm font-medium text-slate-600">Preços selecionados</span>
+                  <span className={`font-bold ${analysis.raw.count >= 3 ? 'text-emerald-700' : analysis.raw.count > 0 ? 'text-amber-700' : 'text-slate-500'}`}>{analysis.raw.count} de 3 (mínimo)</span>
+                </div>
+                {analysis.raw.count >= 3 && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Média (R$)</span>
+                        <span className="font-mono font-bold text-slate-800">{analysis.raw.mean.toFixed(2)}</span>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Preço do meio (mediana) R$</span>
+                        <span className="font-mono font-bold text-slate-800">{analysis.raw.median.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Diferença entre preços (R$)</span>
+                      <span className="font-mono font-bold text-slate-800">{analysis.raw.standardDeviation.toFixed(2)}</span>
+                    </div>
+                    <div className={`rounded-lg px-4 py-3 border ${analysis.cvCompliance ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                      <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block">Variação dos preços</span>
+                      <span className={`font-mono font-bold text-lg ${analysis.cvCompliance ? 'text-emerald-700' : 'text-red-700'}`}>{analysis.raw.coefficientOfVariation.toFixed(2)}%</span>
+                      <span className={`text-xs mt-0.5 block ${analysis.cvCompliance ? 'text-emerald-600' : 'text-red-600'}`}>{analysis.cvCompliance ? 'Preços parecidos (até 25%)' : 'Preços muito diferentes (acima de 25%)'}</span>
+                    </div>
+                    {analysis.iqr && analysis.hadOutliers && (
+                      <div className="rounded-lg bg-slate-100 border border-slate-200 p-3 text-xs text-slate-700">
+                        <span className="font-semibold block mb-1">Valores extremos removidos</span>
+                        {analysis.iqr.outliers.length} preço(s) muito alto(s) ou baixo(s) foi(foram) desconsiderado(s). Restaram {analysis.afterOutlierRemoval?.count} preços para calcular o valor de referência (variação {analysis.afterOutlierRemoval?.coefficientOfVariation.toFixed(2)}%).
+                      </div>
+                    )}
+                    {valoresUsadosNoPrecoReferencia.length > 0 && (
+                      <div className="rounded-lg bg-slate-100 border border-slate-200 p-3">
+                        <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block mb-2">Preços usados no cálculo final</span>
+                        <ul className="space-y-1 text-sm font-mono text-slate-800">
+                          {valoresUsadosNoPrecoReferencia.map((v, i) => (
+                            <li key={i} className="flex justify-between"><span>Amostra {i + 1}</span><span className="font-semibold text-emerald-800">R$ {v.toFixed(2).replace('.', ',')}</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="rounded-xl bg-slate-800 text-white p-4 text-center">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Preço de referência final</span>
+                      <span className="text-xl font-bold text-emerald-400 block mt-0.5">R$ {analysis.referencePrice.toFixed(2).replace('.', ',')}</span>
+                      {isAgrupado && itemAtivo && <span className="text-xs text-slate-500 block mt-1">Item: R$ {(analysis.referencePrice * (itemAtivo.quantidade || 1)).toFixed(2).replace('.', ',')}</span>}
+                    </div>
+
+                    {analiseDesvio && (
+                      <div className={`rounded-lg border p-4 ${analiseDesvio.sobreprecoAlerta ? 'bg-red-50 border-red-300' : 'bg-slate-100 border-slate-200'}`}>
+                        <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block mb-2">Análise de desvio de preço</span>
+                        <p className="text-xs text-slate-500 mb-2">Comparação entre valor estimado da contratação e preço de referência (IN 65/2021) para mitigar riscos.</p>
+                        <div className="text-sm text-slate-700 space-y-1">
+                          <p>Valor estimado (média das amostras): R$ {analiseDesvio.valorEstimado.toFixed(2).replace('.', ',')}</p>
+                          <p>Preço de referência estatístico (IN 65): R$ {analiseDesvio.valorReferencia.toFixed(2).replace('.', ',')}</p>
+                          <p className={`font-bold ${analiseDesvio.sobreprecoAlerta ? 'text-red-700' : 'text-slate-800'}`}>
+                            Desvio: {analiseDesvio.desvioPercentual >= 0 ? '+' : ''}{analiseDesvio.desvioPercentual.toFixed(2)}%
+                          </p>
+                        </div>
+                        {analiseDesvio.sobreprecoAlerta && (
+                          <p className="text-sm font-bold text-red-800 mt-2 pt-2 border-t border-red-200">
+                            Possível sobrepreço identificado com base na análise estatística da IN 65/2021.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </section>
+
+            {/* 3. Alertas de conformidade */}
+            <section className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/80">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-200 text-slate-700 font-mono text-sm">3</span>
+                  Avisos da pesquisa
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">Orientações do Tribunal de Contas</p>
+              </div>
+              <div className="p-6 space-y-4">
+                {analysis.raw.count > 0 && analysis.raw.count < 3 && (
+                  <div className="rounded-lg bg-amber-50 border-2 border-amber-400 p-4">
+                    <p className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-1"><span aria-hidden>⚠️</span> Poucos preços selecionados</p>
+                    <p className="text-sm text-amber-800 leading-relaxed">É necessário escolher <strong>pelo menos 3 preços</strong> na tabela para o sistema calcular o valor de referência.</p>
+                    <p className="text-xs text-amber-700 mt-2 font-medium">Selecionados: {analysis.raw.count} de 3</p>
+                  </div>
+                )}
+                {analysis.raw.count >= 3 && estatisticas.valid && analysis.cvCompliance && (
+                  <>
+                    <div className="rounded-lg bg-emerald-50 border-2 border-emerald-300 p-4 flex items-center gap-2">
+                      <span className="text-emerald-600 font-bold text-sm">✓ Pesquisa válida: preços suficientes e variação aceitável</span>
+                    </div>
+                    <LegalExplanationPanel variant="pesquisa_precos_valida" className="mt-2" />
+                  </>
+                )}
+                {analysis.raw.count >= 3 && !analysis.cvCompliance && analysis.cvAlertMessage && (
+                  <div className="rounded-lg bg-red-50 border-2 border-red-400 p-4">
+                    <p className="text-sm font-bold text-red-800 flex items-center gap-2 mb-1"><span aria-hidden>🚨</span> Atenção: preços muito diferentes</p>
+                    <p className="text-sm text-red-800 leading-relaxed">{analysis.cvAlertMessage}</p>
+                    <p className="text-xs text-red-700 mt-2 font-medium">Remova valores muito altos ou baixos ou inclua mais fontes de preço.</p>
+                  </div>
+                )}
+                {analiseDesvio?.sobreprecoAlerta && (
+                  <div className="rounded-lg bg-red-50 border-2 border-red-400 p-4">
+                    <p className="text-sm font-bold text-red-800 flex items-center gap-2 mb-1"><span aria-hidden>⚠️</span> Possível sobrepreço</p>
+                    <p className="text-sm text-red-800 leading-relaxed">
+                      Possível sobrepreço identificado com base na análise estatística da IN 65/2021.
+                    </p>
+                    <p className="text-xs text-red-700 mt-2 font-medium">Desvio: +{analiseDesvio.desvioPercentual.toFixed(2)}% (acima de 30% indica risco à contratação).</p>
+                  </div>
+                )}
+                {analysis.raw.count === 0 && (
+                  <p className="text-sm text-slate-500 italic">Selecione preços na tabela para ver se a pesquisa está adequada.</p>
+                )}
+              </div>
+            </section>
+
+            {/* 4. Documentação e conclusão */}
+            <section className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/80">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-200 text-slate-700 font-mono text-sm">4</span>
+                  Documentação e conclusão
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">Gerar relatório e concluir pesquisa</p>
+              </div>
+              <div className="p-6 space-y-4">
+                {!estatisticas.valid && analysis.raw.count > 0 && (
+                  <p className="text-xs text-amber-700 font-medium">
+                    {analysis.raw.count < 3 ? 'Selecione pelo menos 3 preços para poder concluir.' : 'Remova valores extremos ou inclua mais preços para que a variação fique aceitável (até 25%).'}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={gerarRelatorio}
+                  disabled={gerandoRelatorio}
+                  className="w-full rounded-lg bg-slate-700 hover:bg-slate-600 disabled:bg-slate-400 text-white font-semibold py-3 text-sm transition-colors"
+                >
+                  {gerandoRelatorio ? 'Gerando...' : 'Gerar relatório de pesquisa (.docx)'}
+                </button>
+                <button
+                  onClick={avancarParaProximoItem}
+                  disabled={!estatisticas.valid}
+                  className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold py-3.5 text-sm transition-colors shadow-sm"
+                >
+                  {itemAtivoIndex < itensParaPesquisar.length - 1 ? 'Salvar item e avançar →' : 'Assinar pesquisa e concluir'}
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </main>
