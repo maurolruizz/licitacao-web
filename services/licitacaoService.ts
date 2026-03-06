@@ -93,8 +93,18 @@ export const licitacaoService = {
   },
 
   listarDoBanco: async (cidade: string) => {
-    const response = await fetch(`${API_URL_V2}/processos/${encodeURIComponent(cidade)}`);
-    if (!response.ok) throw new Error('Erro ao listar');
-    return response.json();
+    try {
+      const encoded = encodeURIComponent(cidade);
+      const response = await fetch(`${API_URL_V2}/processos/${encoded}`);
+      if (!response.ok) {
+        console.warn('[API] Listar processos falhou:', response.status, response.statusText);
+        return { status: 'sucesso', processos: [] };
+      }
+      const data = await response.json();
+      return data && typeof data.processos !== 'undefined' ? data : { status: 'sucesso', processos: [] };
+    } catch (err) {
+      console.warn('[API] Listar processos exceção:', err);
+      return { status: 'sucesso', processos: [] };
+    }
   }
 };

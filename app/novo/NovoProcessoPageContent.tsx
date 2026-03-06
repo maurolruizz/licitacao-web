@@ -82,8 +82,10 @@ export default function NovoProcessoPage() {
     };
 
     try {
+      console.log('[FLOW] Criando processo...');
       const resposta = await licitacaoService.iniciarProcesso(payload);
       const rotaDestino = resposta.rota_destino ?? `/dfd?id=${resposta.id_processo}&regime=${(tipoSelecionado || '').toLowerCase()}`;
+      console.log('[FLOW] Rota destino:', rotaDestino);
       router.push(rotaDestino);
     } catch (error: any) {
       setAlertaCompliance(error?.message || "Erro de conexão com o servidor. Tente novamente.");

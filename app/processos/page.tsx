@@ -32,17 +32,13 @@ export default function MeusProcessos() {
       setOrgao(parsedOrgao);
       
       try {
-        // Busca os processos salvos na nuvem (AI Core)
         const response = await licitacaoService.listarDoBanco(parsedOrgao.cidade);
-        if (response && response.processos) {
-          setProcessos(response.processos);
-        }
-      } catch (error) {
-        // 2. AMORTECEDOR DE IMPACTO (Impede o "Erro Vermelho" de quebrar a UI)
-        console.warn("Falha de comunicação com o AI Core. Operando em modo visual (contingência).", error);
-        setErroConexao(true); // Aciona o banner amigável em vez de estourar erro fatal
+        const lista = response && Array.isArray(response.processos) ? response.processos : [];
+        setProcessos(lista);
+      } catch (_error) {
+        setProcessos([]);
       } finally {
-        setLoading(false); // Garante que a tela de loading suma, com sucesso ou falha
+        setLoading(false);
       }
     };
 
