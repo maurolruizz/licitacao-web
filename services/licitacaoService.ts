@@ -1,12 +1,10 @@
-// A MÁGICA ACONTECE AQUI: O Next.js sabe automaticamente quando está na Vercel ('production')
-const isProducao = process.env.NODE_ENV === 'production';
-
-const API_URL = isProducao 
-  ? 'https://licitacao-ai-core.onrender.com/api/v1' 
-  : 'http://127.0.0.1:8000/api/v1';
+// 🟢 CONEXÃO DEFINITIVA COM A NUVEM
+// Hardcode da URL do Render para garantir que a Vercel nunca tente acessar o localhost.
+const API_URL = 'https://licitacao-ai-core.onrender.com/api/v1';
+const API_URL_V2 = 'https://licitacao-ai-core.onrender.com/api/v2';
 
 export const licitacaoService = {
-  // --- ROTAS ORIGINAIS (REGRESSÃO ZERO) ---
+  // GERAÇÃO DE DOCUMENTOS (V1)
   gerarDFD: async (dados: any) => {
     const response = await fetch(`${API_URL}/gerar-dfd`, {
       method: 'POST',
@@ -37,18 +35,6 @@ export const licitacaoService = {
     return response.json();
   },
 
-  // FUNÇÃO ANTIGA MANTIDA PARA REGRESSÃO ZERO
-  buscarPrecosPNCP: async (palavraChave: string) => {
-    const response = await fetch(`${API_URL}/pesquisa-pncp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ palavra_chave: palavraChave }),
-    });
-    if (!response.ok) throw new Error('Erro ao buscar preços na IN 65');
-    return response.json();
-  },
-
-  // NOVA FUNÇÃO EXATAMENTE COMO O APP/PNCP/PAGE.TSX EXIGE
   pesquisarPNCP: async (palavra_chave: string) => {
     const response = await fetch(`${API_URL}/pesquisa-pncp`, {
       method: 'POST',
@@ -65,7 +51,6 @@ export const licitacaoService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hash_code: hash }),
     });
-    if (!response.ok) throw new Error('Erro na conexão com o sistema de verificação.');
     return response.json();
   },
 
@@ -75,36 +60,41 @@ export const licitacaoService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cidade_ou_cnpj: cidadeOuCnpj }),
     });
-    if (!response.ok) throw new Error('Erro ao buscar dados do IBGE.');
+    if (!response.ok) throw new Error('Erro IBGE');
     return response.json();
   },
 
   obterDataMoatStats: async () => {
     const response = await fetch(`${API_URL}/data-lake/stats`);
-    if (!response.ok) throw new Error('Erro ao conectar com o Data Lake.');
     return response.json();
   },
 
-  // --- NOVAS ROTAS V2 (BANCO DE DADOS - ADIÇÃO SEM SUPRESSÃO) ---
+  // BANCO DE DADOS (V2)
+  iniciarProcesso: async (payload: any) => {
+    const response = await fetch(`${API_URL_V2}/processos/iniciar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Erro ao iniciar processo');
+    }
+    return response.json();
+  },
+
   salvarNoBanco: async (dados: any) => {
-    const response = await fetch(`${API_URL.replace('v1', 'v2')}/processo/salvar`, {
+    const response = await fetch(`${API_URL_V2}/processo/salvar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dados),
     });
-    if (!response.ok) throw new Error('Erro ao salvar no Banco de Dados');
-    return response.json();
-  },
-
-  recuperarDoBanco: async (id: string) => {
-    const response = await fetch(`${API_URL.replace('v1', 'v2')}/processo/${id}`);
-    if (!response.ok) throw new Error('Erro ao recuperar do Banco de Dados');
     return response.json();
   },
 
   listarDoBanco: async (cidade: string) => {
-    const response = await fetch(`${API_URL.replace('v1', 'v2')}/processos/${encodeURIComponent(cidade)}`);
-    if (!response.ok) throw new Error('Erro ao listar processos do Banco de Dados');
+    const response = await fetch(`${API_URL_V2}/processos/${encodeURIComponent(cidade)}`);
+    if (!response.ok) throw new Error('Erro ao listar');
     return response.json();
   }
 };
