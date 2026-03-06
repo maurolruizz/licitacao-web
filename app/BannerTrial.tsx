@@ -13,20 +13,22 @@ export default function BannerTrial() {
   useEffect(() => {
     if (pathname === '/login' || pathname === '/cadastro') return;
 
+    const pipelinePages = ['/dfd', '/etp', '/tr', '/pncp', '/novo'];
+    const isPipeline = pipelinePages.some((p) => pathname?.startsWith(p));
+
     const data = localStorage.getItem('licitacao_auth');
     if (!data) {
-      router.push('/login');
-    } else {
-      const parsed = JSON.parse(data);
-      setAuthData(parsed);
-      
-      const dataCadastro = new Date(parsed.data_cadastro);
-      const dataAtual = new Date();
-      const diffTime = Math.abs(dataAtual.getTime() - dataCadastro.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      const restantes = 30 - diffDays;
-      setDiasRestantes(restantes > 0 ? restantes : 0);
+      if (!isPipeline) router.push('/login');
+      return;
     }
+    const parsed = JSON.parse(data);
+    setAuthData(parsed);
+    const dataCadastro = new Date(parsed.data_cadastro);
+    const dataAtual = new Date();
+    const diffTime = Math.abs(dataAtual.getTime() - dataCadastro.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const restantes = 30 - diffDays;
+    setDiasRestantes(restantes > 0 ? restantes : 0);
   }, [pathname, router]);
 
   if (pathname === '/login' || pathname === '/cadastro' || !authData) return null;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
@@ -96,8 +96,11 @@ function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number
 
 export default function DfdPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [idProcesso, setIdProcesso] = useState<string | null>(null);
   const [regimeProcesso, setRegimeProcesso] = useState<string | null>(null);
+
+  console.log('[FLOW] entered DFD page');
 
   const [cidadeInput, setCidadeInput] = useState('');
   const [loadIbge, setLoadIbge] = useState(false);
@@ -122,17 +125,21 @@ export default function DfdPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const id = urlParams.get('id');
-    const regime = urlParams.get('regime');
+    const id = searchParams.get('id');
+    const regime = searchParams.get('regime');
+
+    console.log('[FLOW] process id:', id, '| regime:', regime);
 
     if (id) {
       setIdProcesso(id);
       localStorage.setItem('licitacao_id_processo', id);
     } else {
       const storedId = localStorage.getItem('licitacao_id_processo');
-      if (storedId) setIdProcesso(storedId);
-      else {
+      if (storedId) {
+        setIdProcesso(storedId);
+        console.log('[FLOW] process id (localStorage):', storedId);
+      } else {
+        console.warn('[FLOW] DFD: no id in URL or localStorage → redirect to /novo?session=expired (NOT /processos)');
         router.replace('/novo?session=expired');
         return;
       }
@@ -140,6 +147,7 @@ export default function DfdPage() {
 
     if (regime) {
       setRegimeProcesso(regime);
+      if (typeof window !== 'undefined') localStorage.setItem('licitacao_regime', regime);
     } else {
       const storedRegime = localStorage.getItem('licitacao_regime');
       if (storedRegime) setRegimeProcesso(storedRegime);
@@ -147,7 +155,7 @@ export default function DfdPage() {
 
     const orgaoSalvo = localStorage.getItem('licitacao_orgao_data');
     if (orgaoSalvo) setOrgaoConfigurado(JSON.parse(orgaoSalvo));
-  }, [router]);
+  }, [router, searchParams]);
 
   const buscarDadosIbge = async (e: React.FormEvent) => {
     e.preventDefault();
