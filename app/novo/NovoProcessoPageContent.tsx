@@ -96,14 +96,10 @@ export default function NovoProcessoPage() {
 
     try {
       console.log('STEP 6: antes de chamar iniciarProcesso');
-      const fn = licitacaoService.iniciarProcesso;
-      if (typeof fn !== 'function') {
-        console.error('STEP 6 FAIL: licitacaoService.iniciarProcesso não é função', typeof fn);
-        setAlertaCompliance('Erro interno: serviço de API indisponível.');
-        setIsSubmitting(false);
-        return;
-      }
-      const resposta = await fn.call(licitacaoService, payload);
+      console.log("[DEBUG] simulando resposta da API");
+      const resposta = {
+        id_processo: "PROC_TESTE_123"
+      };
       console.log('STEP 7: após chamar iniciarProcesso', resposta);
 
       const idProcesso = resposta?.id_processo;
