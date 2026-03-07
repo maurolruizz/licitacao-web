@@ -1,8 +1,6 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
@@ -96,13 +94,11 @@ function CalculadoraDFD({ onCalculoCompleto }: { onCalculoCompleto: (qtd: number
   );
 }
 
-export default function DfdPage() {
+function DfdPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [idProcesso, setIdProcesso] = useState<string | null>(null);
   const [regimeProcesso, setRegimeProcesso] = useState<string | null>(null);
-
-  console.log('[FLOW] entered DFD page');
 
   const [cidadeInput, setCidadeInput] = useState('');
   const [loadIbge, setLoadIbge] = useState(false);
@@ -462,5 +458,14 @@ export default function DfdPage() {
         </div>
       )}
     </main>
+  );
+}
+
+/** Default export: boundary Suspense para useSearchParams (evita erro de prerender no build). */
+export default function DfdPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center p-8 text-slate-600">Carregando...</div>}>
+      <DfdPageContent />
+    </Suspense>
   );
 }
