@@ -37,32 +37,35 @@ export default function NovoProcessoPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('[FLOW] FORM SUBMIT HANDLER');
-    console.log('[FLOW] SUBMIT START');
+    console.log('STEP 1: handleSubmit chamado');
     setAlertaCompliance(null);
-    setIsSubmitting(true); // Trava o botão e mostra "Processando..."
+    setIsSubmitting(true);
 
     const valorNumerico = parseFloat(valorEstimado);
+    console.log('STEP 2: valor numérico obtido', valorNumerico);
 
     // ==========================================
     // TRAVA MATEMÁTICA 1: LIMITES DE DISPENSA
     // ==========================================
+    console.log('STEP 3: antes da validação (travas + órgão)');
     if (tipoSelecionado === 'DISPENSA') {
       if (incisoDispensa === 'inciso_i' && valorNumerico > LIMITE_OBRAS_SERVICOS_ENG) {
+        console.log('STEP 3a: bloqueado por limite obras/serviços');
         setAlertaCompliance(`ALERTA DE COMPLIANCE: O valor estimado (R$ ${valorNumerico.toFixed(2)}) ultrapassa o limite legal para Dispensa de Obras e Serviços de Engenharia (R$ 119.812,02). O sistema bloqueou a continuidade para evitar apontamento no TCU. Mude para a rota de Licitação.`);
         setIsSubmitting(false);
-        return; 
+        return;
       }
-      
       if (incisoDispensa === 'inciso_ii' && valorNumerico > LIMITE_COMPRAS_OUTROS) {
+        console.log('STEP 3b: bloqueado por limite compras/outros');
         setAlertaCompliance(`ALERTA DE COMPLIANCE: O valor estimado (R$ ${valorNumerico.toFixed(2)}) ultrapassa o limite legal para Dispensa de Compras e Outros Serviços (R$ 59.906,02). O sistema bloqueou a continuidade para evitar apontamento no TCU. Mude para a rota de Licitação.`);
         setIsSubmitting(false);
-        return; 
+        return;
       }
     }
 
     const orgaoDataRaw = typeof window !== 'undefined' ? localStorage.getItem('licitacao_orgao_data') : null;
     if (!orgaoDataRaw) {
+      console.log('STEP 3c: bloqueado - órgão não configurado');
       setAlertaCompliance("Configure o órgão antes de criar o processo. Acesse a tela inicial ou Meus Processos para conectar o município (Censo/IBGE).");
       setIsSubmitting(false);
       return;
@@ -70,10 +73,12 @@ export default function NovoProcessoPage() {
     const orgaoData = JSON.parse(orgaoDataRaw);
     const orgao_cidade = orgaoData.cidade;
     if (!orgao_cidade) {
+      console.log('STEP 3d: bloqueado - dados do órgão incompletos');
       setAlertaCompliance("Dados do órgão incompletos. Reconecte o município na tela inicial.");
       setIsSubmitting(false);
       return;
     }
+    console.log('STEP 4: após validação (travas e órgão OK)');
 
     const payload = {
       tipoContratacao: tipoSelecionado,
@@ -84,28 +89,30 @@ export default function NovoProcessoPage() {
       razaoEscolha,
       orgao_cidade
     };
+    console.log('STEP 5: payload montado', payload);
 
     try {
-      console.log('[FLOW] Criando processo...');
-      console.log('TRAVAS APROVADAS. Enviando para a API');
+      console.log('STEP 6: antes de chamar iniciarProcesso');
       const fn = licitacaoService.iniciarProcesso;
       if (typeof fn !== 'function') {
-        console.error('[FLOW] licitacaoService.iniciarProcesso não é uma função', typeof fn, licitacaoService);
+        console.error('STEP 6 FAIL: licitacaoService.iniciarProcesso não é função', typeof fn);
         setAlertaCompliance('Erro interno: serviço de API indisponível.');
         setIsSubmitting(false);
         return;
       }
       const resposta = await fn.call(licitacaoService, payload);
-      console.log('[FLOW] API RESPONSE', resposta);
+      console.log('STEP 7: após chamar iniciarProcesso', resposta);
+
       const idProcesso = resposta?.id_processo;
       const regime = (tipoSelecionado || '').toLowerCase();
       if (!idProcesso) {
-        console.warn('[FLOW] id_processo ausente na resposta', resposta);
+        console.log('STEP 7a: id_processo ausente na resposta');
         setAlertaCompliance('Resposta do servidor sem identificador do processo. Tente novamente.');
         setIsSubmitting(false);
         return;
       }
-      // Pipeline fix: SEMPRE ir para /dfd. Nunca redirecionar para /processos após Verificar Compliance.
+      console.log('STEP 8: id_processo e regime obtidos', { idProcesso, regime });
+
       const rotaDestino = buildDfdPath(idProcesso, regime);
       if (typeof window !== 'undefined') {
         localStorage.setItem('licitacao_id_processo', idProcesso);
@@ -113,10 +120,10 @@ export default function NovoProcessoPage() {
         sessionStorage.setItem('licitacao_id_processo', idProcesso);
         sessionStorage.setItem('licitacao_regime', regime);
       }
-      console.log('[FLOW] NAVIGATING TO DFD', rotaDestino);
+      console.log('STEP 9: navegando para', rotaDestino);
       router.push(rotaDestino);
     } catch (error: any) {
-      console.warn('[FLOW] SUBMIT ERROR', error?.message);
+      console.log('STEP CATCH: erro em handleSubmit', error?.message, error);
       setAlertaCompliance(error?.message || "Erro de conexão com o servidor. Tente novamente.");
       setIsSubmitting(false);
     }
