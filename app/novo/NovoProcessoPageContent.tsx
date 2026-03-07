@@ -87,20 +87,26 @@ export default function NovoProcessoPage() {
 
     try {
       console.log('[FLOW] Criando processo...');
-      const resposta = await licitacaoService.iniciarProcesso(payload);
+      console.log('TRAVAS APROVADAS. Enviando para a API');
+      const fn = licitacaoService.iniciarProcesso;
+      if (typeof fn !== 'function') {
+        console.error('[FLOW] licitacaoService.iniciarProcesso não é uma função', typeof fn, licitacaoService);
+        setAlertaCompliance('Erro interno: serviço de API indisponível.');
+        setIsSubmitting(false);
+        return;
+      }
+      const resposta = await fn.call(licitacaoService, payload);
       console.log('[FLOW] API RESPONSE', resposta);
       const idProcesso = resposta?.id_processo;
       const regime = (tipoSelecionado || '').toLowerCase();
       if (!idProcesso) {
+        console.warn('[FLOW] id_processo ausente na resposta', resposta);
         setAlertaCompliance('Resposta do servidor sem identificador do processo. Tente novamente.');
         setIsSubmitting(false);
         return;
       }
       // Pipeline fix: SEMPRE ir para /dfd. Nunca redirecionar para /processos após Verificar Compliance.
-      let rotaDestino = buildDfdPath(idProcesso, regime);
-      if (rotaDestino.includes('/processos') || !rotaDestino.startsWith('/dfd')) {
-        rotaDestino = buildDfdPath(idProcesso, regime);
-      }
+      const rotaDestino = buildDfdPath(idProcesso, regime);
       if (typeof window !== 'undefined') {
         localStorage.setItem('licitacao_id_processo', idProcesso);
         localStorage.setItem('licitacao_regime', regime);

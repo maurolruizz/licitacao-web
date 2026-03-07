@@ -3,6 +3,9 @@
 const API_URL = 'https://licitacao-ai-core.onrender.com/api/v1';
 const API_URL_V2 = 'https://licitacao-ai-core.onrender.com/api/v2';
 
+// Referência ao fetch nativo para evitar overrides (extensions, mocks) que impeçam a requisição.
+const nativeFetch = typeof globalThis.fetch === 'function' ? globalThis.fetch : (() => { throw new Error('fetch não disponível'); });
+
 export const licitacaoService = {
   // GERAÇÃO DE DOCUMENTOS (V1)
   gerarDFD: async (dados: any) => {
@@ -71,11 +74,14 @@ export const licitacaoService = {
 
   // BANCO DE DADOS (V2)
   iniciarProcesso: async (payload: any) => {
-    const response = await fetch(`${API_URL_V2}/processos/iniciar`, {
+    const url = `${API_URL_V2}/processos/iniciar`;
+    console.log('[iniciarProcesso] ENTRANDO na função, URL:', url);
+    const response = await nativeFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    console.log('API RAW RESPONSE', { ok: response.ok, status: response.status, statusText: response.statusText });
     if (!response.ok) {
       let message = 'Erro ao iniciar processo';
       try {
@@ -84,18 +90,24 @@ export const licitacaoService = {
       } catch {
         message = response.statusText || message;
       }
+      console.warn('API iniciarProcesso !response.ok', { status: response.status, message });
       throw new Error(message);
     }
+    let data: any;
     try {
-      const data = await response.json();
-      if (!data?.id_processo) {
-        throw new Error('Resposta do servidor sem identificador do processo.');
-      }
-      return data;
-    } catch (e: any) {
-      if (e?.message && e.message !== 'Resposta do servidor sem identificador do processo.') throw e;
+      const rawText = await response.text();
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch (parseError) {
+      console.error('API JSON PARSE ERROR', parseError);
       throw new Error('Resposta inválida do servidor. Tente novamente.');
     }
+    console.log('API JSON DATA', data);
+    const idProcesso = data?.id_processo ?? data?.id;
+    if (!idProcesso) {
+      console.warn('API id_processo missing', data);
+      throw new Error('Resposta do servidor sem identificador do processo.');
+    }
+    return { ...data, id_processo: idProcesso };
   },
 
   salvarNoBanco: async (dados: any) => {
