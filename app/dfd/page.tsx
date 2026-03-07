@@ -122,6 +122,15 @@ function DfdPageContent() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const auth = localStorage.getItem('licitacao_auth');
+    if (!auth) {
+      router.replace('/login');
+      return;
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
     // Fallback: useSearchParams pode vir vazio no primeiro render após router.push (Next.js App Router).
     let id = searchParams.get('id');

@@ -48,6 +48,15 @@ export default function PaginaETP() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const auth = localStorage.getItem('licitacao_auth');
+    if (!auth) {
+      router.replace('/login');
+      return;
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     const urlParams = new URLSearchParams(window.location.search);
     const idUrl = urlParams.get('id');
     const regimeUrl = urlParams.get('regime');

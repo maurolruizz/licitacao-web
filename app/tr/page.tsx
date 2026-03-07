@@ -31,6 +31,15 @@ export default function PaginaTR() {
   const [riscoMapeadoETP, setRiscoMapeadoETP] = useState<string>('Não mapeado');
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const auth = localStorage.getItem('licitacao_auth');
+    if (!auth) {
+      router.replace('/login');
+      return;
+    }
+  }, [router]);
+
+  useEffect(() => {
     let regimeAtual: string | null = null;
     if (typeof window === 'undefined') return;
     const urlParams = new URLSearchParams(window.location.search);

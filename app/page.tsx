@@ -18,6 +18,16 @@ export default function Home() {
     setShowLanding(true);
   }, [router]);
 
+  const handleNovoProcesso = () => {
+    if (typeof window === 'undefined') return;
+    const auth = localStorage.getItem('licitacao_auth');
+    if (!auth) {
+      router.push('/login');
+      return;
+    }
+    router.push('/novo');
+  };
+
   if (!showLanding) return null;
 
   return (
@@ -34,12 +44,13 @@ export default function Home() {
           >
             Entrar
           </Link>
-          <Link
-            href="/novo"
+          <button
+            type="button"
+            onClick={handleNovoProcesso}
             className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-md"
           >
             Novo Processo
-          </Link>
+          </button>
         </div>
       </div>
     </main>
