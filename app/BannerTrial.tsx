@@ -5,12 +5,18 @@ import { usePathname, useRouter } from 'next/navigation';
 import { LICITACAO_STORAGE_KEYS } from '../lib/storageKeys';
 
 export default function BannerTrial() {
+  const [mounted, setMounted] = useState(false);
   const [authData, setAuthData] = useState<any>(null);
   const [diasRestantes, setDiasRestantes] = useState(30);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || typeof window === 'undefined') return;
     if (pathname === '/login' || pathname === '/cadastro') return;
 
     const pipelinePages = ['/dfd', '/etp', '/tr', '/pncp', '/novo'];
@@ -29,9 +35,9 @@ export default function BannerTrial() {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     const restantes = 30 - diffDays;
     setDiasRestantes(restantes > 0 ? restantes : 0);
-  }, [pathname, router]);
+  }, [mounted, pathname, router]);
 
-  if (pathname === '/login' || pathname === '/cadastro' || !authData) return null;
+  if (!mounted || pathname === '/login' || pathname === '/cadastro' || !authData) return null;
 
   const handleLogout = () => {
     LICITACAO_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));

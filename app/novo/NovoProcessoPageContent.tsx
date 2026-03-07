@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { licitacaoService } from '../../services/licitacaoService';
 import { LegalExplanationPanel } from '../../components/LegalExplanationPanel';
@@ -9,7 +9,10 @@ import { buildDfdPath } from '../../lib/processUrl';
 export default function NovoProcessoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const sessionExpired = searchParams.get('session') === 'expired';
+  const [sessionExpired, setSessionExpired] = useState(false);
+  useEffect(() => {
+    setSessionExpired(searchParams.get('session') === 'expired');
+  }, [searchParams]);
 
   // Estado que controla em qual tela o usuário está
   const [tipoSelecionado, setTipoSelecionado] = useState<string | null>(null);
