@@ -242,6 +242,7 @@ export default function PaginaPNCP() {
     }
 
     alert("Pesquisa de preços concluída. Valor estimado global: R$ " + valorGlobal.toFixed(2).replace('.', ','));
+    console.log('[NAVIGATION TRIGGER] /processos', 'PNCP concluir pesquisa');
     router.push('/processos');
   };
 

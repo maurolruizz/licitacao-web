@@ -16,6 +16,7 @@ export default function Login() {
     if (data) {
       const parsed = JSON.parse(data);
       if (parsed.login === login && parsed.senha === senha) {
+        console.log('[NAVIGATION TRIGGER] /processos', 'Login sucesso');
         router.push('/processos')
         return;
       }

@@ -142,12 +142,12 @@ function DfdPageContent() {
       setIdProcesso(id);
       localStorage.setItem('licitacao_id_processo', id);
     } else {
-      const storedId = localStorage.getItem('licitacao_id_processo');
+      const storedId = localStorage.getItem('licitacao_id_processo') || sessionStorage.getItem('licitacao_id_processo');
       if (storedId) {
         setIdProcesso(storedId);
-        console.log('[FLOW] process id (localStorage):', storedId);
+        localStorage.setItem('licitacao_id_processo', storedId);
       } else {
-        console.warn('[FLOW] DFD: no id in URL or localStorage → redirect to /novo?session=expired (NOT /processos)');
+        console.warn('[FLOW] DFD: no id in URL or storage → redirect to /novo?session=expired (NOT /processos)');
         router.replace('/novo?session=expired');
         return;
       }
@@ -155,10 +155,16 @@ function DfdPageContent() {
 
     if (regime) {
       setRegimeProcesso(regime);
-      if (typeof window !== 'undefined') localStorage.setItem('licitacao_regime', regime);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('licitacao_regime', regime);
+        sessionStorage.setItem('licitacao_regime', regime);
+      }
     } else {
-      const storedRegime = localStorage.getItem('licitacao_regime');
-      if (storedRegime) setRegimeProcesso(storedRegime);
+      const storedRegime = localStorage.getItem('licitacao_regime') || sessionStorage.getItem('licitacao_regime');
+      if (storedRegime) {
+        setRegimeProcesso(storedRegime);
+        localStorage.setItem('licitacao_regime', storedRegime);
+      }
     }
 
     const orgaoSalvo = localStorage.getItem('licitacao_orgao_data');

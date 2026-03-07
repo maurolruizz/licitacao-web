@@ -36,6 +36,9 @@ export default function NovoProcessoPage() {
   // Função para aplicar travas matemáticas, salvar e redirecionar
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    console.log('[FLOW] FORM SUBMIT HANDLER');
+    console.log('[FLOW] SUBMIT START');
     setAlertaCompliance(null);
     setIsSubmitting(true); // Trava o botão e mostra "Processando..."
 
@@ -85,6 +88,7 @@ export default function NovoProcessoPage() {
     try {
       console.log('[FLOW] Criando processo...');
       const resposta = await licitacaoService.iniciarProcesso(payload);
+      console.log('[FLOW] API RESPONSE', resposta);
       const idProcesso = resposta?.id_processo;
       const regime = (tipoSelecionado || '').toLowerCase();
       if (!idProcesso) {
@@ -92,18 +96,21 @@ export default function NovoProcessoPage() {
         setIsSubmitting(false);
         return;
       }
-      // Pipeline fix: SEMPRE ir para /dfd após Verificar Compliance. Nunca redirecionar para /processos.
-      const rotaDestino = (resposta?.rota_destino && resposta.rota_destino.startsWith('/dfd'))
-        ? resposta.rota_destino
-        : buildDfdPath(idProcesso, regime);
-      // Persistir ANTES da navegação para evitar race: useSearchParams pode vir vazio no primeiro render de /dfd.
+      // Pipeline fix: SEMPRE ir para /dfd. Nunca redirecionar para /processos após Verificar Compliance.
+      let rotaDestino = buildDfdPath(idProcesso, regime);
+      if (rotaDestino.includes('/processos') || !rotaDestino.startsWith('/dfd')) {
+        rotaDestino = buildDfdPath(idProcesso, regime);
+      }
       if (typeof window !== 'undefined') {
         localStorage.setItem('licitacao_id_processo', idProcesso);
         localStorage.setItem('licitacao_regime', regime);
+        sessionStorage.setItem('licitacao_id_processo', idProcesso);
+        sessionStorage.setItem('licitacao_regime', regime);
       }
-      console.log('[FLOW] Rota destino:', rotaDestino);
+      console.log('[FLOW] NAVIGATING TO DFD', rotaDestino);
       router.push(rotaDestino);
     } catch (error: any) {
+      console.warn('[FLOW] SUBMIT ERROR', error?.message);
       setAlertaCompliance(error?.message || "Erro de conexão com o servidor. Tente novamente.");
       setIsSubmitting(false);
     }
@@ -158,7 +165,8 @@ export default function NovoProcessoPage() {
         </button>
       </div>
 
-      <div className="max-w-4xl w-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border border-slate-700">
+      {/* Isola cliques e garante que o card fique acima do BannerTrial (z-50): evita clique acidental no "Meus Processos". */}
+      <div className="relative z-[60] max-w-4xl w-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border border-slate-700" onClick={(e) => e.stopPropagation()}>
         <div className={`p-8 border-b border-slate-700 ${tipoSelecionado === 'DISPENSA' ? 'bg-green-500/10' : tipoSelecionado === 'INEXIGIBILIDADE' ? 'bg-purple-500/10' : 'bg-blue-500/10'}`}>
           <h2 className="text-3xl font-bold text-white uppercase flex items-center gap-4">
             <span className={`w-4 h-4 rounded-full shadow-lg ${tipoSelecionado === 'DISPENSA' ? 'bg-green-500 shadow-green-500/50' : tipoSelecionado === 'INEXIGIBILIDADE' ? 'bg-purple-500 shadow-purple-500/50' : 'bg-blue-500 shadow-blue-500/50'}`}></span>
@@ -169,7 +177,7 @@ export default function NovoProcessoPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-8">
+        <form onSubmit={handleSubmit} action="#" className="p-8 space-y-8">
 
           {sessionExpired && (
             <div className="bg-amber-900/40 border-l-4 border-amber-500 p-5 rounded-r-lg">
@@ -242,6 +250,10 @@ export default function NovoProcessoPage() {
             <button 
               type="submit" 
               disabled={isSubmitting}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('[FLOW] SUBMIT BUTTON CLICKED');
+              }}
               className={`w-full py-5 rounded-xl font-bold text-xl shadow-lg transition-all flex justify-center items-center gap-2 ${
                 isSubmitting ? 'bg-slate-600 cursor-not-allowed text-slate-300' :
                 tipoSelecionado === 'DISPENSA' ? 'bg-green-600 hover:bg-green-500 text-white' : 

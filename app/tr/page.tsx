@@ -189,6 +189,7 @@ export default function PaginaTR() {
         });
 
         setTimeout(() => {
+          console.log('[NAVIGATION TRIGGER] /processos', 'TR salvo, redirect após 2s');
           router.push('/processos');
         }, 2000);
       }
