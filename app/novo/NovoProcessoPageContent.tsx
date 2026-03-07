@@ -10,9 +10,15 @@ export default function NovoProcessoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [orgaoDataRaw, setOrgaoDataRaw] = useState<string | null>(null);
   useEffect(() => {
     setSessionExpired(searchParams.get('session') === 'expired');
   }, [searchParams]);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrgaoDataRaw(localStorage.getItem('licitacao_orgao_data'));
+    }
+  }, []);
 
   // Estado que controla em qual tela o usuário está
   const [tipoSelecionado, setTipoSelecionado] = useState<string | null>(null);
@@ -66,7 +72,6 @@ export default function NovoProcessoPage() {
       }
     }
 
-    const orgaoDataRaw = typeof window !== 'undefined' ? localStorage.getItem('licitacao_orgao_data') : null;
     if (!orgaoDataRaw) {
       console.log('STEP 3c: bloqueado - órgão não configurado');
       setAlertaCompliance("Configure o órgão antes de criar o processo. Acesse a tela inicial ou Meus Processos para conectar o município (Censo/IBGE).");
@@ -96,31 +101,31 @@ export default function NovoProcessoPage() {
 
     try {
       console.log('STEP 6: antes de chamar iniciarProcesso');
-      console.log("[DEBUG] simulando resposta da API");
+      console.log("MOCK PROCESS CREATED");
       const resposta = {
-        id_processo: "PROC_TESTE_123"
+        id_processo: "PROC_DEBUG_001"
       };
-      console.log('STEP 7: após chamar iniciarProcesso', resposta);
-
-      const idProcesso = resposta?.id_processo;
-      const regime = (tipoSelecionado || '').toLowerCase();
-      if (!idProcesso) {
-        console.log('STEP 7a: id_processo ausente na resposta');
-        setAlertaCompliance('Resposta do servidor sem identificador do processo. Tente novamente.');
-        setIsSubmitting(false);
-        return;
-      }
-      console.log('STEP 8: id_processo e regime obtidos', { idProcesso, regime });
-
-      const rotaDestino = buildDfdPath(idProcesso, regime);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('licitacao_id_processo', idProcesso);
-        localStorage.setItem('licitacao_regime', regime);
-        sessionStorage.setItem('licitacao_id_processo', idProcesso);
-        sessionStorage.setItem('licitacao_regime', regime);
-      }
-      console.log('STEP 9: navegando para', rotaDestino);
-      router.push(rotaDestino);
+      router.push(`/dfd?id=${resposta.id_processo}&regime=dispensa`);
+      return;
+      // --- rest of flow (re-enable when API is back) ---
+      // const idProcesso = resposta?.id_processo;
+      // const regime = (tipoSelecionado || '').toLowerCase();
+      // if (!idProcesso) {
+      //   console.log('STEP 7a: id_processo ausente na resposta');
+      //   setAlertaCompliance('Resposta do servidor sem identificador do processo. Tente novamente.');
+      //   setIsSubmitting(false);
+      //   return;
+      // }
+      // console.log('STEP 8: id_processo e regime obtidos', { idProcesso, regime });
+      // const rotaDestino = buildDfdPath(idProcesso, regime);
+      // if (typeof window !== 'undefined') {
+      //   localStorage.setItem('licitacao_id_processo', idProcesso);
+      //   localStorage.setItem('licitacao_regime', regime);
+      //   sessionStorage.setItem('licitacao_id_processo', idProcesso);
+      //   sessionStorage.setItem('licitacao_regime', regime);
+      // }
+      // console.log('STEP 9: navegando para', rotaDestino);
+      // router.push(rotaDestino);
     } catch (error: any) {
       console.log('STEP CATCH: erro em handleSubmit', error?.message, error);
       setAlertaCompliance(error?.message || "Erro de conexão com o servidor. Tente novamente.");

@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 
 // INJEÇÃO COMERCIAL (Projeto PLG)
-import BannerTrial from './BannerTrial';
+// import BannerTrial from './BannerTrial';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,8 +22,8 @@ export default function RootLayout({
       <body className={inter.className}>
         
         {/* === CAMADA COMERCIAL (PLG) === */}
-        {/* O Banner rastreia os 30 dias e bloqueia usuários não logados */}
-        <BannerTrial />
+        {/* BannerTrial temporarily disabled */}
+        {/* <BannerTrial /> */}
         
         {/* === NÚCLEO DO SISTEMA (REGRESSÃO ZERO) === */}
         {/* Todo o seu DFD, ETP, TR e Auditoria rodam aqui dentro de forma intacta */}
