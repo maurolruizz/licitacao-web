@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { licitacaoService } from '../../services/licitacaoService';
 import { LegalExplanationPanel } from '../../components/LegalExplanationPanel';
+import { buildDfdPath } from '../../lib/processUrl';
 
 export default function NovoProcessoPage() {
   const router = useRouter();
@@ -84,7 +85,22 @@ export default function NovoProcessoPage() {
     try {
       console.log('[FLOW] Criando processo...');
       const resposta = await licitacaoService.iniciarProcesso(payload);
-      const rotaDestino = resposta.rota_destino ?? `/dfd?id=${resposta.id_processo}&regime=${(tipoSelecionado || '').toLowerCase()}`;
+      const idProcesso = resposta?.id_processo;
+      const regime = (tipoSelecionado || '').toLowerCase();
+      if (!idProcesso) {
+        setAlertaCompliance('Resposta do servidor sem identificador do processo. Tente novamente.');
+        setIsSubmitting(false);
+        return;
+      }
+      // Pipeline fix: SEMPRE ir para /dfd após Verificar Compliance. Nunca redirecionar para /processos.
+      const rotaDestino = (resposta?.rota_destino && resposta.rota_destino.startsWith('/dfd'))
+        ? resposta.rota_destino
+        : buildDfdPath(idProcesso, regime);
+      // Persistir ANTES da navegação para evitar race: useSearchParams pode vir vazio no primeiro render de /dfd.
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('licitacao_id_processo', idProcesso);
+        localStorage.setItem('licitacao_regime', regime);
+      }
       console.log('[FLOW] Rota destino:', rotaDestino);
       router.push(rotaDestino);
     } catch (error: any) {

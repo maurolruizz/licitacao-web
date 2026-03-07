@@ -77,10 +77,25 @@ export const licitacaoService = {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
+      let message = 'Erro ao iniciar processo';
+      try {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Erro ao iniciar processo');
+        message = errorData?.detail || message;
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new Error(message);
     }
-    return response.json();
+    try {
+      const data = await response.json();
+      if (!data?.id_processo) {
+        throw new Error('Resposta do servidor sem identificador do processo.');
+      }
+      return data;
+    } catch (e: any) {
+      if (e?.message && e.message !== 'Resposta do servidor sem identificador do processo.') throw e;
+      throw new Error('Resposta inválida do servidor. Tente novamente.');
+    }
   },
 
   salvarNoBanco: async (dados: any) => {

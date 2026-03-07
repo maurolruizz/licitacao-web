@@ -125,8 +125,18 @@ export default function DfdPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const id = searchParams.get('id');
-    const regime = searchParams.get('regime');
+    // Fallback: useSearchParams pode vir vazio no primeiro render após router.push (Next.js App Router).
+    let id = searchParams.get('id');
+    let regime = searchParams.get('regime');
+    if ((!id || !regime) && typeof window !== 'undefined') {
+      try {
+        const qs = new URLSearchParams(window.location.search);
+        if (!id) id = qs.get('id');
+        if (!regime) regime = qs.get('regime');
+      } catch {
+        // ignora
+      }
+    }
 
     console.log('[FLOW] process id:', id, '| regime:', regime);
 
