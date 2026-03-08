@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, refreshSession } from '@/lib/auth';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
@@ -44,7 +44,7 @@ export default function PaginaPNCP() {
 
   useEffect(() => {
     console.log('[AUTH_GUARD] /pncp');
-    requireAuth(router);
+    if (requireAuth(router)) refreshSession();
   }, [router]);
 
   useEffect(() => {

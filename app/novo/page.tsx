@@ -2,7 +2,7 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, refreshSession } from "@/lib/auth";
 import NovoProcessoPageContent from "./NovoProcessoPageContent";
 
 export default function Page() {
@@ -11,7 +11,10 @@ export default function Page() {
 
   useEffect(() => {
     console.log("[AUTH_GUARD] /novo");
-    if (requireAuth(router)) setAllowed(true);
+    if (requireAuth(router)) {
+      refreshSession();
+      setAllowed(true);
+    }
   }, [router]);
 
   if (!allowed) return null;

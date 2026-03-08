@@ -18,16 +18,34 @@ export default function Login() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const data = localStorage.getItem('licitacao_auth');
-    
+
     if (data) {
       const parsed = JSON.parse(data);
       if (parsed.login === login && parsed.senha === senha) {
+        let dadosDoOrgao = parsed.orgao;
+        if (!dadosDoOrgao) {
+          try {
+            const rawOrgao = localStorage.getItem('licitacao_orgao_data');
+            if (rawOrgao) dadosDoOrgao = JSON.parse(rawOrgao);
+          } catch {
+            dadosDoOrgao = parsed;
+          }
+        }
+        const authSession = {
+          token: 'auth',
+          orgao: dadosDoOrgao ?? parsed,
+          loginTime: Date.now(),
+        };
+        localStorage.setItem('licitacao_auth', JSON.stringify(authSession));
+        if (dadosDoOrgao) {
+          localStorage.setItem('licitacao_orgao_data', JSON.stringify(dadosDoOrgao));
+        }
         console.log('[NAVIGATION TRIGGER] /processos', 'Login sucesso');
-        router.push('/processos')
+        router.push('/processos');
         return;
       }
     }
-    alert("Credenciais inválidas ou órgão não cadastrado.");
+    alert('Credenciais inválidas ou órgão não cadastrado.');
   };
 
   return (

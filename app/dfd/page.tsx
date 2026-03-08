@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, refreshSession } from '@/lib/auth';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
@@ -123,7 +123,7 @@ function DfdPageContent() {
 
   useEffect(() => {
     console.log('[AUTH_GUARD] /dfd');
-    requireAuth(router);
+    if (requireAuth(router)) refreshSession();
   }, [router]);
 
   useEffect(() => {

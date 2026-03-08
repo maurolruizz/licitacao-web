@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, refreshSession } from '@/lib/auth';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
@@ -50,7 +50,7 @@ export default function PaginaETP() {
 
   useEffect(() => {
     console.log('[AUTH_GUARD] /etp');
-    requireAuth(router);
+    if (requireAuth(router)) refreshSession();
   }, [router]);
 
   useEffect(() => {
