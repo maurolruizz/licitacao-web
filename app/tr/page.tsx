@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { requireAuth } from '@/lib/auth';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
 import { gerarHashAuditoriaDocumento, rodapeHashAuditoriaHtml } from '../../lib/auditHash';
-import { getEstruturaContratacao } from '../../lib/estruturaContratacao';
+import { getEstruturaContratacao, saveEstruturaContratacao, normalizarItens, type ItemContratacao } from '../../lib/estruturaContratacao';
 
 export default function PaginaTR() {
   const router = useRouter(); 
@@ -28,16 +29,16 @@ export default function PaginaTR() {
   const [isAgrupado, setIsAgrupado] = useState(false);
   const [itensLote, setItensLote] = useState<any[]>([]);
 
+  // Fallback: formulário de estrutura quando ETP é pulado (dispensa/inexigibilidade)
+  const [formItens, setFormItens] = useState<Partial<ItemContratacao>[]>([{ nome: '', quantidade: 1, especificacao: '', unidade: 'unidade' }]);
+  const [formAgruparLote, setFormAgruparLote] = useState(false);
+
   // === INJEÇÃO V5.1: INTELIGÊNCIA DE RISCO (ETP -> TR) ===
   const [riscoMapeadoETP, setRiscoMapeadoETP] = useState<string>('Não mapeado');
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const auth = localStorage.getItem('licitacao_auth');
-    if (!auth) {
-      router.replace('/login');
-      return;
-    }
+    console.log('[AUTH_GUARD] /tr');
+    requireAuth(router);
   }, [router]);
 
   useEffect(() => {
@@ -86,9 +87,9 @@ export default function PaginaTR() {
     if (objetoSalvo) setObjeto(prev => (prev && prev.trim() ? prev : objetoSalvo));
     if (especificacaoSalva) setEspecificacao(prev => (prev && prev.trim() ? prev : especificacaoSalva));
     if (riscoSalvo) setRiscoMapeadoETP(prev => (prev && prev !== 'Não mapeado' ? prev : riscoSalvo));
-    if (estrutura.isAgrupado && estrutura.itens.length > 0) {
-      setIsAgrupado(true);
+    if (estrutura.itens.length > 0) {
       setItensLote(estrutura.itens);
+      setIsAgrupado(estrutura.isAgrupado);
     }
 
     if (!objetoSalvo && !especificacaoSalva && !hasBypass) {
@@ -148,6 +149,35 @@ export default function PaginaTR() {
     localStorage.removeItem('licitacao_itens_lote');
     localStorage.removeItem('licitacao_risco');
     window.location.reload();
+  };
+
+  const adicionarItemEstrutura = () => {
+    setFormItens((prev) => [...prev, { nome: '', quantidade: 1, especificacao: '', unidade: 'unidade' }]);
+  };
+
+  const atualizarItemEstrutura = (index: number, campo: keyof ItemContratacao, valor: string | number) => {
+    setFormItens((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [campo]: valor };
+      return next;
+    });
+  };
+
+  const removerItemEstrutura = (index: number) => {
+    if (formItens.length <= 1) return;
+    setFormItens((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const salvarEstruturaFallback = () => {
+    const itensValidos = formItens.filter((i) => (i.nome ?? '').trim() !== '');
+    if (itensValidos.length === 0) {
+      alert('Informe ao menos um item com nome.');
+      return;
+    }
+    const itensNorm = normalizarItens(itensValidos);
+    saveEstruturaContratacao({ isAgrupado: formAgruparLote, itens: itensNorm });
+    setItensLote(itensNorm);
+    setIsAgrupado(formAgruparLote);
   };
 
   const prepararEnvio = (e: React.FormEvent<HTMLFormElement>) => {
@@ -321,14 +351,98 @@ export default function PaginaTR() {
               </div>
             </div>
 
-            {isAgrupado && itensLote.length > 0 && (
+            {/* Fallback: formulário para definir itens quando ETP é pulado (dispensa/inexigibilidade) */}
+            {isBypassETP && itensLote.length === 0 && (
+              <div className="p-5 border border-amber-200 bg-amber-50/50 rounded-lg shadow-inner">
+                <h4 className="font-bold text-amber-900 text-sm mb-2">Definir itens da contratação</h4>
+                <p className="text-xs text-slate-600 mb-4">
+                  Como o ETP não foi realizado, informe os itens que compõem o objeto desta contratação.
+                </p>
+                <div className="space-y-4">
+                  {formItens.map((item, index) => (
+                    <div key={index} className="bg-white p-4 rounded border border-slate-200 space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs font-medium text-slate-600 block mb-1">Nome do item</label>
+                          <input
+                            type="text"
+                            value={item.nome ?? ''}
+                            onChange={(e) => atualizarItemEstrutura(index, 'nome', e.target.value)}
+                            placeholder="Ex.: Material de escritório"
+                            className="w-full p-2 border border-slate-300 rounded text-sm"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="text-xs font-medium text-slate-600 block mb-1">Quantidade</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={item.quantidade ?? 1}
+                              onChange={(e) => atualizarItemEstrutura(index, 'quantidade', parseInt(e.target.value, 10) || 1)}
+                              className="w-full p-2 border border-slate-300 rounded text-sm"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs font-medium text-slate-600 block mb-1">Unidade</label>
+                            <input
+                              type="text"
+                              value={item.unidade ?? 'unidade'}
+                              onChange={(e) => atualizarItemEstrutura(index, 'unidade', e.target.value)}
+                              placeholder="unidade"
+                              className="w-full p-2 border border-slate-300 rounded text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 block mb-1">Especificação</label>
+                        <textarea
+                          value={item.especificacao ?? ''}
+                          onChange={(e) => atualizarItemEstrutura(index, 'especificacao', e.target.value)}
+                          placeholder="Detalhes técnicos do item"
+                          rows={2}
+                          className="w-full p-2 border border-slate-300 rounded text-sm"
+                        />
+                      </div>
+                      {formItens.length > 1 && (
+                        <button type="button" onClick={() => removerItemEstrutura(index)} className="text-xs text-red-600 hover:text-red-700 font-medium">
+                          Remover item
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={adicionarItemEstrutura} className="text-sm bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium px-3 py-2 rounded">
+                      + Adicionar item
+                    </button>
+                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                      <input type="checkbox" checked={formAgruparLote} onChange={(e) => setFormAgruparLote(e.target.checked)} className="rounded border-slate-300" />
+                      Agrupar itens em lote (Art. 40)
+                    </label>
+                  </div>
+                  <button type="button" onClick={salvarEstruturaFallback} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded text-sm">
+                    Definir estrutura e continuar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Lista read-only: do ETP (Art. 40) ou consolidada no TR (bypass) */}
+            {itensLote.length > 0 && (
               <div className="p-5 border border-blue-200 bg-blue-50/30 rounded-lg shadow-inner" aria-readonly="true">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Art. 40 Consolidado</span>
+                  {isBypassETP ? (
+                    <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Estrutura consolidada</span>
+                  ) : (
+                    <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Art. 40 Consolidado</span>
+                  )}
                   <h4 className="font-bold text-blue-900 text-sm">Relação de Itens do Lote (somente leitura)</h4>
                 </div>
                 <p className="text-xs text-slate-600 mb-3 text-justify">
-                  Esta estrutura foi validada na Matriz de Parcelamento do ETP e não pode ser alterada diretamente no TR sem nova justificativa técnica prévia.
+                  {isBypassETP
+                    ? 'Estrutura definida no TR para regime de dispensa/inexigibilidade. Não pode ser alterada após salvar.'
+                    : 'Esta estrutura foi validada na Matriz de Parcelamento do ETP e não pode ser alterada diretamente no TR sem nova justificativa técnica prévia.'}
                 </p>
                 <div className="space-y-2">
                   {itensLote.map((item, index) => (

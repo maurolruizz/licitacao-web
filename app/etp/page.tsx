@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { requireAuth } from '@/lib/auth';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
@@ -48,12 +49,8 @@ export default function PaginaETP() {
   const [mesesContrato, setMesesContrato] = useState<number>(12);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const auth = localStorage.getItem('licitacao_auth');
-    if (!auth) {
-      router.replace('/login');
-      return;
-    }
+    console.log('[AUTH_GUARD] /etp');
+    requireAuth(router);
   }, [router]);
 
   useEffect(() => {

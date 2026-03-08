@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { requireAuth } from '@/lib/auth';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
@@ -121,12 +122,8 @@ function DfdPageContent() {
   const [dadosFormulario, setDadosFormulario] = useState<FormData | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const auth = localStorage.getItem('licitacao_auth');
-    if (!auth) {
-      router.replace('/login');
-      return;
-    }
+    console.log('[AUTH_GUARD] /dfd');
+    requireAuth(router);
   }, [router]);
 
   useEffect(() => {

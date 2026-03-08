@@ -2,6 +2,7 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { requireAuth } from "@/lib/auth";
 import NovoProcessoPageContent from "./NovoProcessoPageContent";
 
 export default function Page() {
@@ -9,13 +10,8 @@ export default function Page() {
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const auth = localStorage.getItem("licitacao_auth");
-    if (!auth) {
-      router.replace("/login");
-      return;
-    }
-    setAllowed(true);
+    console.log("[AUTH_GUARD] /novo");
+    if (requireAuth(router)) setAllowed(true);
   }, [router]);
 
   if (!allowed) return null;

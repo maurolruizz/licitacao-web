@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { requireAuth } from '@/lib/auth';
 import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
@@ -42,12 +43,8 @@ export default function PaginaPNCP() {
   const [selecoesPorItem, setSelecoesPorItem] = useState<Record<number, any[]>>({});
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const auth = localStorage.getItem('licitacao_auth');
-    if (!auth) {
-      router.replace('/login');
-      return;
-    }
+    console.log('[AUTH_GUARD] /pncp');
+    requireAuth(router);
   }, [router]);
 
   useEffect(() => {
@@ -456,10 +453,10 @@ export default function PaginaPNCP() {
             </section>
           </div>
 
-          {/* Coluna direita: 2. Análise | 3. Conformidade | 4. Documentação */}
-          <div className="space-y-6">
+          {/* Coluna direita: 2. Análise | 3. Conformidade | 4. Documentação (empilhada verticalmente) */}
+          <div className="flex flex-col gap-6">
             {/* 2. Análise estatística */}
-            <section className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden sticky top-6">
+            <section className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50/80">
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                   <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-200 text-slate-700 font-mono text-sm">2</span>

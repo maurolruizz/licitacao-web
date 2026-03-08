@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isAuthenticated } from '@/lib/auth';
 import Link from 'next/link';
 
 export default function Home() {
@@ -19,13 +20,12 @@ export default function Home() {
   }, [router]);
 
   const handleNovoProcesso = () => {
-    if (typeof window === 'undefined') return;
-    const auth = localStorage.getItem('licitacao_auth');
-    if (!auth) {
+    console.log('[NAV] novo processo');
+    if (isAuthenticated()) {
+      router.push('/novo');
+    } else {
       router.push('/login');
-      return;
     }
-    router.push('/novo');
   };
 
   if (!showLanding) return null;

@@ -1,13 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { clearAuth } from '@/lib/auth';
 
 export default function Login() {
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const router = useRouter();
+
+  useEffect(() => {
+    console.log('[AUTH] reset session');
+    clearAuth();
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
