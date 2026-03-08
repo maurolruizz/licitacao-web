@@ -21,4 +21,8 @@ export const LICITACAO_STORAGE_KEYS = [
   'licitacao_dfd_setor',
   'licitacao_dfd_origem',
   'licitacao_dfd_impacto',
+  // Motor de estrutura da contratação e geração do IN65
+  'licitacao_estrutura_contratacao',
+  'licitacao_resultado_pesquisa',
+  'licitacao_documento_in65',
 ] as const;

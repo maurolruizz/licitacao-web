@@ -6,8 +6,19 @@ import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
 import { runFullAnalysis } from '../../lib/pncpStatsEngine';
-import { gerarRelatorioIN65Docx, downloadRelatorioIN65 } from '../../lib/pncpReportDocx';
+import { gerarRelatorioIN65Docx, downloadRelatorioIN65, type ResultadoPesquisaDoc } from '../../lib/pncpReportDocx';
 import { LegalExplanationPanel } from '../../components/LegalExplanationPanel';
+import { getEstruturaContratacao } from '../../lib/estruturaContratacao';
+
+const KEY_RESULTADO_PESQUISA = 'licitacao_resultado_pesquisa';
+const KEY_DOCUMENTO_IN65 = 'licitacao_documento_in65';
+
+/** Item de pesquisa de preços para validação IN65 (fonte, valor, url). */
+export type PesquisaItem = {
+  fonte: string;
+  valor: number;
+  url?: string;
+};
 
 export default function PaginaPNCP() {
   const router = useRouter();
@@ -65,22 +76,19 @@ export default function PaginaPNCP() {
       if (storedRegime) setRegimeProcesso(storedRegime);
     }
 
-    // 2. HERANÇA DO ETP/TR (Lógica Original Intacta)
+    // 2. HERANÇA DO ETP/TR (motor de estrutura)
     const objetoSalvo = localStorage.getItem('licitacao_objeto');
-    const isAgrupadoSalvo = localStorage.getItem('licitacao_is_agrupado') === 'true';
-    const itensLoteSalvo = localStorage.getItem('licitacao_itens_lote');
+    const estrutura = getEstruturaContratacao();
 
     if (objetoSalvo) {
       setObjetoPrincipal(objetoSalvo);
-      
-      if (isAgrupadoSalvo && itensLoteSalvo) {
+      if (estrutura.isAgrupado && estrutura.itens.length > 0) {
         setIsAgrupado(true);
-        const parseados = JSON.parse(itensLoteSalvo);
-        setItensParaPesquisar(parseados);
-        setTermoBusca(parseados[0].nome);
+        setItensParaPesquisar(estrutura.itens);
+        setTermoBusca(estrutura.itens[0].nome);
       } else {
         setIsAgrupado(false);
-        setItensParaPesquisar([{ nome: objetoSalvo, quantidade: 1, especificacao: '' }]);
+        setItensParaPesquisar([{ nome: objetoSalvo, quantidade: 1, especificacao: '', unidade: 'unidade' }]);
         setTermoBusca(objetoSalvo);
       }
     }
@@ -175,11 +183,14 @@ export default function PaginaPNCP() {
       alert("É necessário selecionar pelo menos 3 preços para cada item, conforme orientação do Tribunal de Contas.");
       return;
     }
+    if (analysis.raw.count >= 3 && analysis.cvCompliance) {
+      console.log('[PNCP_ITEM_VALIDADO]');
+    }
     if (itemAtivoIndex < itensParaPesquisar.length - 1) {
       const proximoIndice = itemAtivoIndex + 1;
       setItemAtivoIndex(proximoIndice);
       setTermoBusca(itensParaPesquisar[proximoIndice].nome);
-      setResultadosDaBusca([]); 
+      setResultadosDaBusca([]);
     } else {
       salvarEConcluir();
     }
@@ -191,6 +202,13 @@ export default function PaginaPNCP() {
     setGerandoRelatorio(true);
     try {
       const orgaoData = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}') : {};
+      let resultadoPesquisa: ResultadoPesquisaDoc | undefined;
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem(KEY_RESULTADO_PESQUISA) : null;
+        if (raw) resultadoPesquisa = JSON.parse(raw) as ResultadoPesquisaDoc;
+      } catch {
+        // ignora JSON inválido
+      }
       const dados = {
         objetoContratacao: objetoPrincipal,
         idProcesso: idProcesso ?? undefined,
@@ -198,6 +216,8 @@ export default function PaginaPNCP() {
         municipio: orgaoData.cidade ?? undefined,
         itens: itensParaPesquisar,
         selecoesPorItem,
+        estruturaContratacao: getEstruturaContratacao(),
+        resultadoPesquisa,
       };
       const blob = await gerarRelatorioIN65Docx(dados);
       downloadRelatorioIN65(blob);
@@ -214,18 +234,74 @@ export default function PaginaPNCP() {
       const confirmar = window.confirm("Os preços deste item estão muito diferentes entre si. O Tribunal de Contas recomenda ajustar (remover valores extremos) antes de concluir. Deseja mesmo prosseguir?");
       if (!confirmar) return;
     }
-    
+
+    const itensResultado: { nome: string; quantidade: number; valorItem: number; mediaReferencia: number; selecoes: PesquisaItem[] }[] = [];
     let valorGlobal = 0;
+
     itensParaPesquisar.forEach((item, index) => {
       const sel = selecoesPorItem[index] || [];
       const vals = sel.map((s) => s.valor_unitario);
       const refPrice = index === itemAtivoIndex ? analysis.referencePrice : (vals.length ? runFullAnalysis(vals).referencePrice : 0);
-      valorGlobal += refPrice * (item.quantidade || 1);
+      const quantidade = item.quantidade ?? 1;
+      const valorItem = refPrice * quantidade;
+      valorGlobal += valorItem;
+
+      const selecoes: PesquisaItem[] = sel.map((s) => ({
+        fonte: s.orgao_comprador ?? '',
+        valor: s.valor_unitario ?? 0,
+        url: s.link ?? s.url,
+      }));
+
+      itensResultado.push({
+        nome: item.nome ?? '',
+        quantidade,
+        valorItem,
+        mediaReferencia: refPrice,
+        selecoes,
+      });
     });
+
+    console.log('[PNCP_VALOR_GLOBAL]', valorGlobal);
+
+    const resultadoPesquisa = {
+      valorGlobal,
+      itens: itensResultado,
+      validacaoIN65: { minimoPrecos: 3, cvMaximoPercentual: 25 },
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(KEY_RESULTADO_PESQUISA, JSON.stringify(resultadoPesquisa));
+    }
 
     localStorage.setItem('licitacao_pncp_concluido', 'true');
     localStorage.setItem('licitacao_valor_estimado', valorGlobal.toString());
-    
+
+    // Gerar documento IN65 e salvar referência no localStorage
+    try {
+      const orgaoData = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('licitacao_orgao_data') || '{}') : {};
+      const dados = {
+        objetoContratacao: objetoPrincipal,
+        idProcesso: idProcesso ?? undefined,
+        regime: regimeProcesso ?? undefined,
+        municipio: orgaoData.cidade ?? undefined,
+        itens: itensParaPesquisar,
+        selecoesPorItem,
+        estruturaContratacao: getEstruturaContratacao(),
+        resultadoPesquisa,
+      };
+      await gerarRelatorioIN65Docx(dados);
+      const refIn65 = {
+        generatedAt: new Date().toISOString(),
+        valorGlobal,
+        idProcesso: idProcesso ?? undefined,
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(KEY_DOCUMENTO_IN65, JSON.stringify(refIn65));
+      }
+      console.log('[IN65_FINAL_GERADO]');
+    } catch (err) {
+      console.error('Erro ao gerar referência IN65:', err);
+    }
+
     // INJEÇÃO V5.3: Amarração Final no Banco de Dados
     try {
       const processId = idProcesso || localStorage.getItem('licitacao_id_processo');

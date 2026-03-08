@@ -6,6 +6,7 @@ import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
 import { gerarHashAuditoriaDocumento, rodapeHashAuditoriaHtml } from '../../lib/auditHash';
+import { getEstruturaContratacao } from '../../lib/estruturaContratacao';
 
 export default function PaginaTR() {
   const router = useRouter(); 
@@ -75,23 +76,19 @@ export default function PaginaTR() {
     const hasBypass: boolean = regimeAtual !== null && (regimeAtual.toUpperCase() === 'DISPENSA' || regimeAtual.toUpperCase() === 'INEXIGIBILIDADE');
     setIsBypassETP(hasBypass);
 
-    // 3. Leitura da Memória do ETP (encadeamento ETP → TR; não sobrescreve input do usuário)
+    // 3. Leitura da Memória do ETP (encadeamento ETP → TR; motor de estrutura)
     const objetoSalvo = localStorage.getItem('licitacao_objeto');
     const especificacaoSalva = localStorage.getItem('licitacao_especificacao');
-    const isAgrupadoSalvo = localStorage.getItem('licitacao_is_agrupado');
-    const itensLoteSalvo = localStorage.getItem('licitacao_itens_lote');
     const riscoSalvo = localStorage.getItem('licitacao_risco');
+    const estrutura = getEstruturaContratacao();
+    console.log('[TR_ESTRUTURA_CARREGADA]');
 
     if (objetoSalvo) setObjeto(prev => (prev && prev.trim() ? prev : objetoSalvo));
     if (especificacaoSalva) setEspecificacao(prev => (prev && prev.trim() ? prev : especificacaoSalva));
     if (riscoSalvo) setRiscoMapeadoETP(prev => (prev && prev !== 'Não mapeado' ? prev : riscoSalvo));
-    if (isAgrupadoSalvo === 'true' && itensLoteSalvo) {
-      try {
-        setIsAgrupado(true);
-        setItensLote(JSON.parse(itensLoteSalvo));
-      } catch {
-        // ignora JSON inválido
-      }
+    if (estrutura.isAgrupado && estrutura.itens.length > 0) {
+      setIsAgrupado(true);
+      setItensLote(estrutura.itens);
     }
 
     if (!objetoSalvo && !especificacaoSalva && !hasBypass) {
@@ -325,21 +322,21 @@ export default function PaginaTR() {
             </div>
 
             {isAgrupado && itensLote.length > 0 && (
-              <div className="p-5 border border-blue-200 bg-blue-50/30 rounded-lg shadow-inner">
+              <div className="p-5 border border-blue-200 bg-blue-50/30 rounded-lg shadow-inner" aria-readonly="true">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Art. 40 Consolidado</span>
-                  <h4 className="font-bold text-blue-900 text-sm">Relação de Itens do Lote</h4>
+                  <h4 className="font-bold text-blue-900 text-sm">Relação de Itens do Lote (somente leitura)</h4>
                 </div>
                 <p className="text-xs text-slate-600 mb-3 text-justify">
                   Esta estrutura foi validada na Matriz de Parcelamento do ETP e não pode ser alterada diretamente no TR sem nova justificativa técnica prévia.
                 </p>
                 <div className="space-y-2">
                   {itensLote.map((item, index) => (
-                    <div key={index} className="bg-white p-3 rounded border border-blue-100 text-sm flex gap-3 shadow-sm">
-                      <div className="font-bold text-blue-800 bg-blue-50 px-2 py-1 rounded h-fit">{item.quantidade}x</div>
-                      <div>
+                    <div key={index} className="bg-white p-3 rounded border border-blue-100 text-sm flex gap-3 shadow-sm pointer-events-none">
+                      <div className="font-bold text-blue-800 bg-blue-50 px-2 py-1 rounded h-fit">{item.quantidade} {item.unidade ?? 'unidade'}</div>
+                      <div className="flex-1 min-w-0">
                         <strong className="block text-slate-800">{item.nome}</strong>
-                        <span className="text-slate-500 text-xs">{item.especificacao}</span>
+                        {item.especificacao && <span className="text-slate-500 text-xs block">{item.especificacao}</span>}
                       </div>
                     </div>
                   ))}

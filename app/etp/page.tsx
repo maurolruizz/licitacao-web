@@ -6,6 +6,7 @@ import { licitacaoService } from '../../services/licitacaoService';
 import Link from 'next/link';
 import { buildProcessPath } from '../../lib/processUrl';
 import { gerarHashAuditoriaDocumento, rodapeHashAuditoriaHtml } from '../../lib/auditHash';
+import { saveEstruturaContratacao } from '../../lib/estruturaContratacao';
 
 export default function PaginaETP() {
   const router = useRouter();
@@ -195,6 +196,10 @@ export default function PaginaETP() {
     if (isAgrupado) {
       localStorage.setItem('licitacao_itens_lote', JSON.stringify(itensLote));
     }
+
+    // Motor de estrutura da contratação (mantém compatibilidade com chaves antigas)
+    saveEstruturaContratacao({ isAgrupado, itens: itensLote });
+    console.log('[ETP_ESTRUTURA_SALVA]');
 
     const necessidadeEnriquecida = `${necessidade}\n\nEspecificações Preliminares: ${especificacao}\nRequisitos: ${requisitos}`;
     
