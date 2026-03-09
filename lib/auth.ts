@@ -17,7 +17,7 @@ export interface AuthData {
 
 function parseAuth(raw: string): AuthData | null {
   try {
-    const data = JSON.parse(raw) as Partial<AuthData>;
+    const data = JSON.parse(raw) as Partial<AuthData> & { login?: string };
     if (data && typeof data.token === 'string' && typeof data.loginTime === 'number') {
       return {
         token: data.token,
@@ -31,13 +31,42 @@ function parseAuth(raw: string): AuthData | null {
   }
 }
 
+/** Considera autenticado se existir formato novo (token + loginTime) ou legado (login, ex.: vindo do cadastro). */
 export function isAuthenticated(): boolean {
   if (typeof window === 'undefined') return false;
   console.log('[AUTH] check');
   const raw = localStorage.getItem(AUTH_KEY);
   if (raw == null || raw === '') return false;
 
-  const auth = parseAuth(raw);
+  let auth = parseAuth(raw);
+
+  // Formato legado (cadastro): { login, senha, cidade, ... } sem token/loginTime → migrar e aceitar
+  if (!auth) {
+    try {
+      const data = JSON.parse(raw) as Record<string, unknown> & { login?: string };
+      if (data && typeof data.login === 'string') {
+        let orgao = data.orgao;
+        if (orgao == null) {
+          try {
+            const rawOrgao = localStorage.getItem(ORGAO_DATA_KEY);
+            if (rawOrgao) orgao = JSON.parse(rawOrgao);
+          } catch {
+            orgao = data;
+          }
+        }
+        const migrated: AuthData = {
+          token: 'auth',
+          orgao: orgao ?? data,
+          loginTime: Date.now(),
+        };
+        localStorage.setItem(AUTH_KEY, JSON.stringify(migrated));
+        auth = migrated;
+      }
+    } catch {
+      return false;
+    }
+  }
+
   if (!auth) return false;
 
   const elapsed = Date.now() - auth.loginTime;
@@ -61,6 +90,20 @@ export function clearAuth(): void {
   console.log('[AUTH] clear');
   localStorage.removeItem(AUTH_KEY);
   localStorage.removeItem(ORGAO_DATA_KEY);
+}
+
+/**
+ * Limpa a sessão apenas se existir loginTime e estiver expirada.
+ * Evita logout acidental ao montar a página de login com sessão ainda válida.
+ */
+export function clearAuthIfExpired(): void {
+  if (typeof window === 'undefined') return;
+  const auth = getAuth();
+  if (!auth || typeof auth.loginTime !== 'number') return;
+  const elapsed = Date.now() - auth.loginTime;
+  if (elapsed > SESSION_DURATION) {
+    clearAuth();
+  }
 }
 
 /** Atualiza loginTime para manter a sessão ativa enquanto o usuário usa o sistema. */

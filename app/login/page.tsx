@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { clearAuth } from '@/lib/auth';
+import { clearAuthIfExpired } from '@/lib/auth';
 
 export default function Login() {
   const [login, setLogin] = useState('');
@@ -11,8 +11,7 @@ export default function Login() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log('[AUTH] reset session');
-    clearAuth();
+    clearAuthIfExpired();
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {

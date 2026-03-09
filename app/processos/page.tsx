@@ -58,6 +58,25 @@ export default function MeusProcessos() {
     return { texto: fase, cor: 'bg-slate-100 text-slate-800 border-slate-200' };
   };
 
+  /** Retorna a rota para continuar o processo com base no stage (ou fase_atual quando stage não existir). */
+  const getContinueUrl = (proc: { stage?: string; fase_atual?: string; id_processo: string }): string | null => {
+    const id = proc.id_processo;
+    const stage = proc.stage ?? (() => {
+      const fa = proc.fase_atual || '';
+      if (fa === 'DFD_CONCLUIDO') return 'ETP';
+      if (fa === 'ETP_CONCLUIDO') return 'TR';
+      if (fa === 'TR_CONCLUIDO') return 'PNCP';
+      if (fa === 'PESQUISA_CONCLUIDA') return 'FINAL';
+      return 'DFD';
+    })();
+    if (stage === 'DFD') return `/dfd?processId=${id}`;
+    if (stage === 'ETP') return `/etp?processId=${id}`;
+    if (stage === 'TR') return `/tr?processId=${id}`;
+    if (stage === 'PNCP') return `/pncp?processId=${id}`;
+    if (stage === 'FINAL') return `/auditoria?processId=${id}`;
+    return null;
+  };
+
   const handleValidarProcesso = (proc: any, index: number) => {
     const resultado = validateProcess(proc);
     setValidacaoAtiva(index);
@@ -165,6 +184,16 @@ export default function MeusProcessos() {
                     )}
 
                     <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2">
+                      {getContinueUrl(proc) && (
+                        <button
+                          type="button"
+                          onClick={() => router.push(getContinueUrl(proc)!)}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded border border-blue-700 transition-colors text-xs text-center flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          Continuar Processo
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleValidarProcesso(proc, index)}
